@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Közös Kosár</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Közös családi bevásárlólista, ami valós időben szinkronizál, és egy étel nevéből összeállítja a hozzávalókat.">
+<meta name="theme-color" content="#EAF3FB" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111727" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@500;600;700;800&display=swap">
+<style>
+/* Layout: one phone-width column like a fridge-door list; greeting + list name on top, each store aisle is its own colourful card with an icon tile, composer docked at the bottom. */
+:root {
+  --bg: #EAF3FB;
+  --surface: #FFFFFF;
+  --ink: #1E2A45;
+  --muted: #5E6C88;
+  --line: #E1E9F2;
+  --accent: #F2553C;
+  --accent-ink: #FFFFFF;
+  --sun: #FFC93C;
+  --sun-ink: #2B2100;
+  --sun-soft: #FFF3CC;
+  --leaf: #23A86B;
+  --leaf-ink: #FFFFFF;
+  --danger: #D23B2A;
+  --tile-l: 91%;
+  --icon-l: 38%;
+  --chip-l: 95%;
+  --ring-l: 60%;
+  --shadow: 0 1px 0 rgba(30,42,69,.04), 0 10px 26px -12px rgba(30,42,69,.22);
+  --f-display: "Fredoka", "Baloo 2", "Arial Rounded MT Bold", system-ui, sans-serif;
+  --f-body: "Nunito", "Segoe UI", Roboto, system-ui, sans-serif;
+  --r: 22px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111727; --surface: #1A2236; --ink: #EEF2FA; --muted: #9AA7C2; --line: #263049;
+    --accent: #FF7558; --accent-ink: #1A0A05; --sun: #FFD25E; --sun-ink: #2B2100; --sun-soft: #2E2815;
+    --leaf: #4CD39A; --leaf-ink: #06281A; --danger: #FF7B69;
+    --tile-l: 24%; --icon-l: 74%; --chip-l: 20%; --ring-l: 58%;
+    --shadow: 0 1px 0 rgba(0,0,0,.3), 0 12px 28px -12px rgba(0,0,0,.6);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111727; --surface: #1A2236; --ink: #EEF2FA; --muted: #9AA7C2; --line: #263049;
+  --accent: #FF7558; --accent-ink: #1A0A05; --sun: #FFD25E; --sun-ink: #2B2100; --sun-soft: #2E2815;
+  --leaf: #4CD39A; --leaf-ink: #06281A; --danger: #FF7B69;
+  --tile-l: 24%; --icon-l: 74%; --chip-l: 20%; --ring-l: 58%;
+  --shadow: 0 1px 0 rgba(0,0,0,.3), 0 12px 28px -12px rgba(0,0,0,.6);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 500 16px/1.45 var(--f-body);
+  min-height: 100dvh;
+  background-image: radial-gradient(circle at 12% -4%, hsl(44 95% 70% / .35), transparent 38%), radial-gradient(circle at 105% 8%, hsl(6 90% 70% / .22), transparent 32%);
+  background-attachment: fixed;
+}
+body::before {
+  content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px);
+  z-index: 10; background: var(--bg);
+}
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: 3px solid var(--sun); outline-offset: 2px; border-radius: 12px; }
+[hidden] { display: none !important; }
+
+.wrap {
+  max-width: 640px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+/* Avatars: six cheerful fridge-magnet colours */
+.face {
+  width: 26px; height: 26px; border-radius: 50%; display: inline-grid; place-items: center; flex: none;
+  font: 600 12px/1 var(--f-display); border: 2.5px solid var(--bg); margin-left: -8px;
+}
+.face:first-child { margin-left: 0; }
+.f0 { background: #F2553C; color: #fff; } .f1 { background: #FFC93C; color: #2B2100; }
+.f2 { background: #3A8DDE; color: #fff; } .f3 { background: #23A86B; color: #fff; }
+.f4 { background: #8B5CF6; color: #fff; } .f5 { background: #EC4899; color: #fff; }
+.face.mini { width: 18px; height: 18px; font-size: 10px; border: 0; margin: 0; }
+.face.big { width: 36px; height: 36px; font-size: 16px; border: 0; margin: 0; }
+
+/* Header */
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); }
+.top .wrap { display: flex; align-items: center; gap: 12px; padding-block: 14px 10px; }
+.title-btn { flex: 1; min-width: 0; text-align: left; background: none; border: 0; padding: 0; }
+.hello { margin: 0; font: 600 14px/1.2 var(--f-display); color: var(--accent); letter-spacing: .01em; }
+.title-btn h1 {
+  margin: 2px 0 0; font: 700 30px/1.08 var(--f-display); letter-spacing: -.005em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.title-btn .sub { color: var(--muted); font-size: 14px; font-weight: 600; display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+.faces { display: inline-flex; }
+.icon-btn {
+  width: 48px; height: 48px; border-radius: 16px; border: 0; flex: none;
+  background: var(--sun); color: var(--sun-ink); display: grid; place-items: center;
+  box-shadow: 0 4px 0 hsl(40 80% 45% / .45); transition: transform .12s;
+}
+.icon-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 hsl(40 80% 45% / .45); }
+.icon-btn svg { width: 22px; height: 22px; }
+
+.banner {
+  margin: 6px 0 0; padding: 10px 14px; border-radius: 16px; font-size: 14px; font-weight: 600;
+  background: var(--sun-soft); color: var(--ink);
+}
+.banner.err { background: transparent; border: 2px solid var(--danger); }
+
+/* List */
+main { padding-bottom: calc(var(--composer-h, 150px) + 16px); }
+#groups { display: grid; gap: 14px; margin-top: 12px; }
+.group { background: var(--surface); border-radius: var(--r); box-shadow: var(--shadow); overflow: hidden; }
+.group h2 {
+  margin: 0; padding: 12px 12px 6px; display: flex; align-items: center; gap: 10px;
+  font: 600 17px/1.2 var(--f-display);
+}
+.cat-ic {
+  width: 38px; height: 38px; border-radius: 13px; display: grid; place-items: center; flex: none;
+  background: hsl(var(--h) 85% var(--tile-l)); color: hsl(var(--h) 65% var(--icon-l));
+}
+.cat-ic svg { width: 22px; height: 22px; }
+.cat-name { flex: 1; min-width: 0; }
+.group h2 .n {
+  min-width: 28px; height: 28px; padding: 0 8px; border-radius: 99px; display: grid; place-items: center;
+  background: hsl(var(--h) 85% var(--tile-l)); color: hsl(var(--h) 65% var(--icon-l));
+  font: 600 14px/1 var(--f-display); font-variant-numeric: tabular-nums;
+}
+.group.basket { --h: 150; background: transparent; box-shadow: none; border: 2px dashed var(--line); }
+.group.basket .cat-ic, .group.basket .n { background: var(--surface); color: var(--muted); }
+ul.items { list-style: none; margin: 0; padding: 0 0 6px; }
+.item { display: flex; align-items: center; gap: 12px; padding: 8px 6px 8px 14px; min-height: 58px; }
+.item + .item { border-top: 1.5px dashed var(--line); }
+.check {
+  width: 30px; height: 30px; border-radius: 50%; flex: none; padding: 0;
+  border: 2.5px solid hsl(var(--h) 60% var(--ring-l)); background: transparent;
+  display: grid; place-items: center; color: var(--leaf-ink);
+}
+.check svg { width: 16px; height: 16px; opacity: 0; }
+.item.done .check { background: var(--leaf); border-color: var(--leaf); animation: pop .35s cubic-bezier(.3,1.6,.5,1); }
+.item.done .check svg { opacity: 1; }
+@keyframes pop { 0% { transform: scale(.6); } 100% { transform: scale(1); } }
+.item-main { flex: 1; min-width: 0; }
+.item-line { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.item-name { font-weight: 700; font-size: 16.5px; overflow-wrap: anywhere; }
+.item-qty {
+  font: 600 13.5px/1.5 var(--f-display); font-variant-numeric: tabular-nums; white-space: nowrap;
+  background: hsl(var(--h) 85% var(--chip-l)); color: hsl(var(--h) 60% var(--icon-l)); padding: 0 9px; border-radius: 99px;
+}
+.item-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; font-weight: 600; color: var(--muted); margin-top: 3px; }
+.from { background: var(--sun-soft); color: var(--ink); padding: 0 8px; border-radius: 99px; font-size: 12.5px; }
+.from::before { content: "✦ "; color: var(--sun); }
+.item.done .item-name { text-decoration: line-through; text-decoration-thickness: 2px; color: var(--muted); font-weight: 600; }
+.item.done .item-qty { background: transparent; color: var(--muted); }
+.item.fresh { animation: fresh 1.6s ease-out; }
+@keyframes fresh { 0% { background: var(--sun-soft); transform: translateX(-6px); } 20% { transform: none; } 100% { background: transparent; } }
+.del {
+  width: 40px; height: 40px; border: 0; background: none; color: var(--muted); opacity: .7;
+  border-radius: 12px; display: grid; place-items: center; flex: none;
+}
+.del svg { width: 18px; height: 18px; }
+.del:hover { color: var(--danger); opacity: 1; }
+.link-btn {
+  margin-left: 4px; border: 0; border-radius: 99px; padding: 6px 12px;
+  background: var(--surface); color: var(--danger); font: 600 14px/1 var(--f-display);
+}
+
+.empty {
+  margin-top: 12px; text-align: center; color: var(--muted); padding: 22px 20px 28px;
+  background: var(--surface); border-radius: var(--r); box-shadow: var(--shadow); display: grid; justify-items: center; gap: 6px;
+}
+.empty-art { width: 170px; height: auto; }
+.empty strong { color: var(--ink); font: 700 24px/1.2 var(--f-display); }
+.empty span { max-width: 30ch; }
+
+/* Composer */
+.composer {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 6;
+  background: linear-gradient(to top, var(--bg) 72%, transparent);
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+}
+.composer .wrap { padding-block: 20px 0; }
+.chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; scrollbar-width: none; }
+.chip {
+  flex: none; border: 0; background: var(--surface); color: var(--ink); box-shadow: var(--shadow);
+  border-radius: 99px; padding: 8px 14px; font: 600 14px/1 var(--f-display);
+}
+.chip::before { content: "✦ "; color: var(--sun); }
+.bar {
+  display: flex; gap: 8px; align-items: center; background: var(--surface);
+  border: 2.5px solid transparent; border-radius: 26px; padding: 6px; box-shadow: var(--shadow);
+  transition: border-color .2s;
+}
+.bar.ai { border-color: var(--sun); }
+.bar input { flex: 1; min-width: 0; border: 0; background: transparent; padding: 10px 4px; outline: none; font-size: 16px; font-weight: 600; }
+.bar input::placeholder { color: var(--muted); font-weight: 500; }
+.mode-btn {
+  height: 44px; padding: 0 14px; border-radius: 20px; border: 0; flex: none;
+  background: var(--sun-soft); color: var(--ink); display: flex; align-items: center; gap: 6px;
+  font: 600 15px/1 var(--f-display);
+}
+.mode-btn svg { width: 19px; height: 19px; color: var(--sun); }
+.bar.ai .mode-btn { background: var(--sun); color: var(--sun-ink); }
+.bar.ai .mode-btn svg { color: var(--sun-ink); }
+.send {
+  width: 44px; height: 44px; border-radius: 50%; border: 0; flex: none;
+  background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; transition: transform .12s;
+}
+.send:active { transform: scale(.92); }
+.bar.ai .send { background: var(--sun); color: var(--sun-ink); }
+.send svg { width: 22px; height: 22px; }
+
+/* Sheets */
+dialog.sheet {
+  border: 0; padding: 0; margin: auto auto 0; width: 100%; max-width: 640px;
+  max-height: 88dvh; background: var(--surface); color: var(--ink);
+  border-radius: 28px 28px 0 0; box-shadow: var(--shadow);
+}
+dialog.sheet[open] { animation: up .28s cubic-bezier(.2,1.2,.4,1); }
+@keyframes up { from { transform: translateY(40px); opacity: .4; } }
+dialog.sheet::backdrop { background: rgba(17,23,39,.45); }
+.sheet-body {
+  padding-block: 10px calc(20px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(18px, env(safe-area-inset-left, 0px));
+  padding-right: max(18px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 14px;
+}
+.sheet-body::before { content: ""; width: 44px; height: 5px; border-radius: 9px; background: var(--line); justify-self: center; }
+.sheet h3 { margin: 0; font: 700 24px/1.15 var(--f-display); }
+.sheet p { margin: 0; color: var(--muted); font-size: 15px; }
+.field { display: grid; gap: 6px; }
+.field label { font: 600 14px/1 var(--f-display); color: var(--muted); }
+.field input { border: 2px solid var(--line); border-radius: 16px; padding: 12px 14px; background: var(--bg); font-size: 16px; font-weight: 600; }
+.btn {
+  border: 0; border-radius: 18px; padding: 14px 18px; font: 600 17px/1 var(--f-display);
+  background: var(--accent); color: var(--accent-ink); box-shadow: 0 4px 0 hsl(8 70% 40% / .45);
+}
+.btn:active { transform: translateY(2px); box-shadow: 0 2px 0 hsl(8 70% 40% / .45); }
+.btn.ai { background: var(--sun); color: var(--sun-ink); box-shadow: 0 4px 0 hsl(40 80% 40% / .45); }
+.btn.ghost, .btn.danger { background: transparent; color: var(--ink); border: 2px solid var(--line); box-shadow: none; }
+.btn.danger { color: var(--danger); }
+.btn:disabled { opacity: .5; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; }
+.row > .btn { flex: 1; min-width: 140px; }
+.copybox { display: flex; gap: 8px; align-items: center; border-radius: 18px; padding: 6px 6px 6px 14px; background: var(--bg); }
+.copybox code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; font-size: 13px; user-select: all; }
+.copybox .btn { padding: 10px 14px; font-size: 15px; box-shadow: none; }
+.members { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.members li { display: flex; align-items: center; gap: 8px; background: var(--bg); border-radius: 99px; padding: 4px 14px 4px 4px; font-weight: 700; }
+.members em { font-style: normal; color: var(--muted); font-weight: 600; }
+
+.suggest-list { list-style: none; margin: 0; padding: 4px; max-height: 46dvh; overflow-y: auto; background: var(--bg); border-radius: 20px; display: grid; gap: 4px; }
+.suggest-list label { display: flex; align-items: center; gap: 12px; padding: 9px 12px; cursor: pointer; background: var(--surface); border-radius: 16px; }
+.suggest-list input { width: 22px; height: 22px; accent-color: var(--leaf); flex: none; }
+.suggest-list .nm { font-weight: 700; }
+.suggest-list .tag { font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.suggest-list .qty { margin-left: auto; font: 600 14px/1 var(--f-display); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.note { font-size: 14px; font-weight: 600; background: var(--sun-soft); border-radius: 16px; padding: 10px 14px; color: var(--ink) !important; }
+
+.loading { display: flex; gap: 14px; align-items: center; color: var(--muted); font-weight: 600; padding: 8px 0; }
+.bounce { display: flex; gap: 6px; }
+.bounce i { width: 12px; height: 12px; border-radius: 50%; background: var(--sun); animation: hop .9s ease-in-out infinite; }
+.bounce i:nth-child(2) { background: var(--accent); animation-delay: .15s; }
+.bounce i:nth-child(3) { background: var(--leaf); animation-delay: .3s; }
+@keyframes hop { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-9px); } }
+
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(100px + env(safe-area-inset-bottom, 0px)); z-index: 20;
+  background: var(--ink); color: var(--bg); padding: 12px 18px; border-radius: 99px; font-weight: 700; font-size: 15px;
+  max-width: calc(100% - 32px); box-shadow: var(--shadow); text-align: center;
+}
+
+/* Onboarding */
+.onboard { padding-block: 36px 40px; display: grid; gap: 20px; }
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-mark { width: 52px; height: 52px; border-radius: 18px; background: var(--accent); display: grid; place-items: center; color: var(--accent-ink); transform: rotate(-6deg); box-shadow: 0 4px 0 hsl(8 70% 40% / .45); }
+.brand-mark svg { width: 30px; height: 30px; }
+.brand strong { font: 700 20px var(--f-display); }
+.ob-art { width: min(100%, 300px); height: auto; }
+.onboard h1 { margin: 0; font: 700 clamp(34px, 9.5vw, 48px)/1.04 var(--f-display); text-wrap: balance; }
+.onboard h1 em { font-style: normal; color: var(--accent); }
+.onboard .lead { margin: 0; color: var(--muted); font-size: 17px; font-weight: 600; max-width: 34ch; }
+.card { background: var(--surface); border-radius: var(--r); box-shadow: var(--shadow); padding: 18px; display: grid; gap: 14px; }
+
+/* Listening panel */
+.listen {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 10px; padding: 10px 10px 10px 14px;
+  background: var(--surface); border-radius: 20px; box-shadow: var(--shadow); border: 2.5px solid var(--accent);
+}
+.eq { display: flex; align-items: center; gap: 3px; height: 26px; flex: none; }
+.eq i { width: 4px; height: 8px; border-radius: 4px; background: var(--accent); animation: eq 1s ease-in-out infinite; }
+.eq i:nth-child(2) { animation-delay: .15s; background: var(--sun); }
+.eq i:nth-child(3) { animation-delay: .3s; background: var(--leaf); }
+.eq i:nth-child(4) { animation-delay: .45s; }
+@keyframes eq { 0%, 100% { height: 6px; } 50% { height: 24px; } }
+.listen-body { flex: 1; min-width: 0; }
+.listen-body strong { display: block; font: 600 15px/1.2 var(--f-display); }
+.listen-body p { margin: 2px 0 0; font-size: 14px; color: var(--muted); font-weight: 600; overflow-wrap: anywhere; }
+.listen-body p b { color: var(--leaf); }
+#listen-stop {
+  flex: none; border: 0; border-radius: 14px; padding: 10px 14px; background: var(--bg); color: var(--ink);
+  font: 600 15px/1 var(--f-display);
+}
+.send.listening { animation: ring 1.4s ease-out infinite; }
+@keyframes ring { 0% { box-shadow: 0 0 0 0 hsl(8 90% 60% / .55); } 100% { box-shadow: 0 0 0 14px hsl(8 90% 60% / 0); } }
+
+/* Question card */
+.qcard {
+  margin-bottom: 10px; padding: 14px; border-radius: 20px; background: var(--surface); box-shadow: var(--shadow);
+  border: 2.5px solid var(--sun); display: grid; gap: 10px; animation: up .28s cubic-bezier(.2,1.2,.4,1);
+}
+.qcard.flat { margin: 0; box-shadow: none; }
+.qhead { display: flex; align-items: center; gap: 10px; }
+.qhead strong { flex: 1; min-width: 0; font: 600 17px/1.25 var(--f-display); }
+.qbadge { width: 30px; height: 30px; border-radius: 50%; background: var(--sun); color: var(--sun-ink); display: grid; place-items: center; font: 700 18px/1 var(--f-display); flex: none; }
+.qqty { font: 600 13.5px/1.6 var(--f-display); background: var(--sun-soft); padding: 0 9px; border-radius: 99px; white-space: nowrap; }
+.qopts { display: flex; flex-wrap: wrap; gap: 8px; }
+.qopts button {
+  border: 0; border-radius: 99px; padding: 10px 14px; background: var(--sun-soft); color: var(--ink);
+  font: 600 15px/1 var(--f-display);
+}
+.qopts button:active { background: var(--sun); color: var(--sun-ink); }
+.qopts .skip { background: transparent; color: var(--muted); border: 2px solid var(--line); }
+.qmore { margin: 0; font-size: 13px; color: var(--muted); font-weight: 600; }
+
+/* Toast with action */
+.toast { display: flex; align-items: center; gap: 12px; text-align: left; }
+.toast span { flex: 1; min-width: 0; }
+.toast button { flex: none; border: 0; background: var(--sun); color: var(--sun-ink); border-radius: 99px; padding: 6px 12px; font: 600 14px/1 var(--f-display); }
+.toast { bottom: calc(var(--composer-h, 90px) + 8px); border-radius: 18px; left: 16px; right: 16px; transform: none; width: fit-content; max-width: min(560px, calc(100% - 32px)); margin: 0 auto; }
+
+/* Settings toggles */
+.toggles { display: grid; gap: 8px; }
+.toggle { display: flex; gap: 12px; align-items: flex-start; background: var(--bg); border-radius: 16px; padding: 12px 14px; cursor: pointer; }
+.toggle input { width: 22px; height: 22px; accent-color: var(--leaf); flex: none; margin: 1px 0 0; }
+.toggle b { display: block; font-weight: 700; }
+.toggle small { display: block; color: var(--muted); font-size: 13px; font-weight: 600; }
+
+/* Servings picker + recipe source */
+.serv { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.serv button {
+  border: 0; border-radius: 16px; padding: 10px 0 8px; background: var(--sun-soft); color: var(--ink);
+  font: 700 22px/1 var(--f-display); display: grid; justify-items: center; gap: 2px;
+}
+.serv button small { font: 600 12px/1 var(--f-body); color: var(--muted); }
+.serv button.last { outline: 2.5px solid var(--sun); }
+.serv button:active { background: var(--sun); color: var(--sun-ink); }
+.source { margin: 0; font-size: 14.5px; font-weight: 600; color: var(--muted) !important; background: var(--bg); border-radius: 14px; padding: 10px 14px; }
+.source a, a.from { color: var(--accent); font-weight: 700; text-decoration: none; }
+.source a:hover, a.from:hover { text-decoration: underline; }
+.source small { font-weight: 600; }
+a.from::after { content: " ↗"; }
+
+/* Sheet header with back / star / close */
+.sheet-head { display: flex; align-items: center; gap: 10px; }
+.sheet-head h3 { flex: 1; min-width: 0; }
+.back-btn, .close-btn {
+  width: 40px; height: 40px; border-radius: 14px; border: 0; background: var(--bg); color: var(--ink);
+  display: grid; place-items: center; flex: none;
+}
+.back-btn svg, .close-btn svg { width: 20px; height: 20px; }
+.star {
+  width: 42px; height: 42px; border-radius: 50%; border: 0; background: transparent; flex: none;
+  display: grid; place-items: center; color: var(--muted); padding: 0;
+}
+.star svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
+.star.on { color: var(--sun); }
+.star.on svg { fill: currentColor; animation: pop .35s cubic-bezier(.3,1.6,.5,1); }
+.star.big { width: 56px; height: 56px; background: var(--sun-soft); }
+.star.big svg { width: 32px; height: 32px; }
+
+/* Recipe search sheet */
+dialog.sheet.tall { height: 88dvh; }
+dialog.sheet.tall .sheet-body { height: 100%; grid-template-rows: auto auto auto auto 1fr; overflow: hidden; }
+.rs-bar { box-shadow: none; background: var(--bg); border-color: transparent; padding-left: 14px; }
+.rs-bar:focus-within { border-color: var(--sun); }
+.rs-ic { width: 20px; height: 20px; color: var(--muted); flex: none; }
+.rs-bar input::-webkit-search-cancel-button { display: none; }
+.tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: var(--bg); padding: 4px; border-radius: 16px; }
+.tabs button {
+  border: 0; border-radius: 12px; padding: 10px; background: transparent; color: var(--muted);
+  font: 600 15px/1 var(--f-display); display: flex; justify-content: center; align-items: center; gap: 6px;
+}
+.tabs button[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+.tabs button span { background: var(--sun); color: var(--sun-ink); border-radius: 99px; padding: 2px 7px; font-size: 12.5px; }
+#rs-body { overflow-y: auto; min-height: 0; display: grid; align-content: start; gap: 12px; padding-bottom: 6px; }
+.rhint { margin: 0; color: var(--muted); font-size: 14.5px; font-weight: 600; }
+.wrapchips { flex-wrap: wrap; overflow: visible; padding: 0; }
+.wrapchips .chip { background: var(--sun-soft); box-shadow: none; }
+.rlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.rcard { display: flex; align-items: stretch; background: var(--bg); border-radius: 18px; overflow: hidden; }
+.rmain {
+  flex: 1; min-width: 0; text-align: left; border: 0; background: transparent; padding: 12px 6px 12px 14px;
+  display: grid; gap: 3px; justify-items: start;
+}
+.rmain strong { font: 600 17px/1.25 var(--f-display); overflow-wrap: anywhere; }
+.rdesc { font-size: 14px; color: var(--muted); font-weight: 600; }
+.rmeta { font-size: 12.5px; color: var(--muted); font-weight: 700; }
+.rsite { font: 700 11.5px/1 var(--f-body); text-transform: uppercase; letter-spacing: .06em; padding: 4px 8px; border-radius: 99px; }
+.rsite.sk { background: hsl(6 85% var(--tile-l)); color: hsl(6 65% var(--icon-l)); }
+.rsite.mm { background: hsl(135 60% var(--tile-l)); color: hsl(135 55% var(--icon-l)); }
+.rsite.idea { background: var(--sun-soft); color: var(--ink); }
+.ract { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 2px; padding: 6px 8px 6px 0; }
+.rlink { width: 40px; height: 40px; display: grid; place-items: center; color: var(--muted); border-radius: 12px; }
+.rlink svg { width: 19px; height: 19px; }
+.rsite-search {
+  display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; border-radius: 16px;
+  border: 2px dashed var(--line); color: var(--ink); font: 600 14.5px/1.2 var(--f-display); text-decoration: none; text-align: center;
+}
+.rsite-search svg { width: 17px; height: 17px; flex: none; }
+.rempty { display: grid; justify-items: center; text-align: center; gap: 8px; padding: 26px 10px; color: var(--muted); font-weight: 600; }
+.rempty strong { color: var(--ink); font: 700 20px/1.2 var(--f-display); }
+#rs-mic.listening { animation: ring 1.4s ease-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- Onboarding -->
+<section id="onboard" class="wrap onboard" hidden>
+  <div class="brand">
+    <div class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9h18l-2 10a2 2 0 0 1-2 1.6H7A2 2 0 0 1 5 19L3 9Z"/><path d="M8 9l3-5M16 9l-3-5"/><path d="M9 14l2 2 4-4"/></svg></div>
+    <strong>Közös Kosár</strong>
+  </div>
+  <svg class="ob-art" viewBox="0 0 300 120" aria-hidden="true">
+    <circle cx="40" cy="70" r="30" fill="#F2553C"/><circle cx="31" cy="62" r="4" fill="#fff"/><circle cx="49" cy="62" r="4" fill="#fff"/><path d="M30 78q10 9 20 0" stroke="#fff" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <circle cx="105" cy="58" r="40" fill="#FFC93C"/><circle cx="93" cy="50" r="5" fill="#2B2100"/><circle cx="117" cy="50" r="5" fill="#2B2100"/><path d="M91 68q14 12 28 0" stroke="#2B2100" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <circle cx="175" cy="74" r="26" fill="#3A8DDE"/><circle cx="167" cy="68" r="3.5" fill="#fff"/><circle cx="183" cy="68" r="3.5" fill="#fff"/><path d="M167 80q8 7 16 0" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+    <circle cx="232" cy="84" r="18" fill="#23A86B"/><circle cx="226" cy="80" r="2.8" fill="#fff"/><circle cx="238" cy="80" r="2.8" fill="#fff"/><path d="M226 89q6 5 12 0" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <path d="M262 50h30l-4 22a3 3 0 0 1-3 2.5h-16a3 3 0 0 1-3-2.5Z" fill="#EC4899"/><path d="M268 50l5-10M286 50l-5-10" stroke="#EC4899" stroke-width="3.5" stroke-linecap="round"/>
+  </svg>
+  <h1 id="ob-title">Egy lista az <em>egész családnak</em>.</h1>
+  <p class="lead" id="ob-lead">Amit bárki felír, azonnal megjelenik mindenkinél. Írd be, mit főzöl, és a hozzávalók maguktól felkerülnek.</p>
+  <form id="ob-form" class="card" novalidate>
+    <div class="field">
+      <label for="ob-name">A neved</label>
+      <input id="ob-name" autocomplete="given-name" maxlength="30" placeholder="pl. Dani" required>
+    </div>
+    <div class="field" id="ob-list-field">
+      <label for="ob-list">A lista neve</label>
+      <input id="ob-list" maxlength="40" value="Családi bevásárlás">
+    </div>
+    <button class="btn" id="ob-submit" type="submit">Lista létrehozása</button>
+    <p id="ob-err" class="banner err" hidden></p>
+  </form>
+</section>
+
+<!-- App -->
+<div id="app" hidden>
+  <header class="top">
+    <div class="wrap">
+      <button class="title-btn" id="open-list" aria-label="Lista beállításai">
+        <p class="hello" id="hello">Szia!</p>
+        <h1 id="list-name">Lista</h1>
+        <div class="sub"><span class="faces" id="faces"></span><span id="list-sub"></span></div>
+      </button>
+      <button class="icon-btn" id="share-btn" aria-label="Családtag meghívása">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>
+      </button>
+    </div>
+  </header>
+  <main class="wrap">
+    <p id="mode-banner" class="banner" hidden></p>
+    <div id="groups"></div>
+  </main>
+  <div class="composer">
+    <div class="wrap">
+      <div id="questions" aria-live="polite" hidden></div>
+      <div id="listen" class="listen" role="status" aria-live="polite" hidden>
+        <span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <div class="listen-body"><strong id="listen-status">Hallgatlak, mondd sorban!</strong><p id="listen-text"></p></div>
+        <button type="button" id="listen-stop">Kész</button>
+      </div>
+      <form class="bar" id="bar" autocomplete="off">
+        <button type="button" class="mode-btn" id="mode-btn" aria-label="Receptkereső és kedvencek">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.6L18 9.5l-4.2 1.9L12 16l-1.8-4.6L6 9.5l4.2-1.9L12 3Z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8.8-2Z"/></svg>
+          <span>Receptek</span>
+        </button>
+        <input id="q" enterkeyhint="send" placeholder="Mondd vagy írd: tej, 2 kg krumpli…" aria-label="Új tétel">
+        <button class="send" id="send" type="submit" aria-label="Hozzáadás"></button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- AI sheet -->
+<dialog class="sheet" id="ai-sheet">
+  <div class="sheet-body">
+    <div class="sheet-head">
+      <button type="button" class="back-btn" id="ai-back" aria-label="Vissza a receptekhez" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <h3 id="ai-title">Hozzávalók</h3>
+      <button type="button" class="star" id="ai-fav" aria-pressed="false" aria-label="Hozzáadás a kedvencekhez" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2l2.6 5.5 6 .7-4.4 4.1 1.2 5.9L12 16.5l-5.4 2.9 1.2-5.9L3.4 9.4l6-.7Z"/></svg></button>
+    </div>
+    <div id="ai-servings" class="qcard flat" hidden></div>
+    <p id="ai-source" class="source" hidden></p>
+    <div id="ai-loading" class="loading"><div class="bounce" aria-hidden="true"><i></i><i></i><i></i></div><span id="ai-loading-text">Összeállítom a hozzávalókat…</span></div>
+    <p id="ai-note" class="note" hidden></p>
+    <div id="ai-q" class="qcard flat" hidden></div>
+    <div id="ai-gsearch" hidden></div>
+    <ul class="suggest-list" id="ai-list" hidden></ul>
+    <p id="ai-hint" hidden>A már otthon lévő alapokat (só, olaj…) és a listán szereplőket nem jelöltem be.</p>
+    <div class="row">
+      <button class="btn ghost" type="button" id="ai-cancel">Mégse</button>
+      <button class="btn ai" type="button" id="ai-add" disabled>Hozzáadás</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- Recipe search / favourites sheet -->
+<dialog class="sheet tall" id="recipes-sheet" aria-labelledby="rs-title">
+  <div class="sheet-body">
+    <div class="sheet-head">
+      <h3 id="rs-title">Receptek</h3>
+      <button type="button" class="close-btn" id="rs-close" aria-label="Bezárás"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <form class="bar rs-bar" id="rs-form" autocomplete="off" role="search">
+      <svg class="rs-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+      <input id="rs-q" type="search" enterkeyhint="search" placeholder="pl. csirke, gyors vacsora, leves" aria-label="Recept keresése">
+      <button type="button" class="send" id="rs-mic" aria-label="Keresés hanggal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5v4"/></svg></button>
+    </form>
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" id="rs-tab-search" aria-selected="true">Keresés</button>
+      <button type="button" role="tab" id="rs-tab-favs" aria-selected="false">Kedvencek</button>
+    </div>
+    <div id="rs-body" aria-live="polite"></div>
+    <div id="rs-gsearch" hidden></div>
+  </div>
+</dialog>
+
+<!-- List / share sheet -->
+<dialog class="sheet" id="list-sheet">
+  <div class="sheet-body">
+    <h3>Hívd meg a családot</h3>
+    <p>Küldd el ezt a linket. Aki megnyitja, a nevét beírva rögtön ugyanazt a listát látja és szerkeszti.</p>
+    <div class="copybox"><code id="invite-link"></code><button class="btn" type="button" id="copy-link">Másolás</button></div>
+    <button class="btn" type="button" id="native-share" hidden>Megosztás…</button>
+    <ul class="members" id="members"></ul>
+    <div class="field">
+      <label for="rename">A lista neve</label>
+      <input id="rename" maxlength="40">
+    </div>
+    <div class="field">
+      <label for="myname">A neved</label>
+      <input id="myname" maxlength="30">
+    </div>
+    <div class="toggles" id="voice-settings">
+      <label class="toggle"><input type="checkbox" id="set-auto"><span><b>Megnyitáskor rögtön hallgasson</b><small>Az app indulásakor azonnal diktálhatsz.</small></span></label>
+      <label class="toggle"><input type="checkbox" id="set-speak"><span><b>Kérdések felolvasása</b><small>Ha valamit nem ért, hangosan visszakérdez.</small></span></label>
+    </div>
+    <div class="row">
+      <button class="btn danger" type="button" id="leave">Kilépés a listából</button>
+      <button class="btn" type="button" id="save-settings">Mentés</button>
+    </div>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

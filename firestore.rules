@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isMember(listId) {
+      return signedIn()
+        && request.auth.uid in get(/databases/$(database)/documents/lists/$(listId)).data.members;
+    }
+
+    match /lists/{listId} {
+      // Csak a tagok látják a listát
+      allow read: if signedIn() && request.auth.uid in resource.data.members;
+
+      // Új lista: a létrehozó az egyetlen tag
+      allow create: if signedIn()
+        && request.resource.data.members.keys().hasOnly([request.auth.uid])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 60;
+
+      // Tag bármit módosíthat (átnevezés, kilépés).
+      // Nem tag (meghívó linkkel érkező) csak saját magát adhatja hozzá a tagokhoz.
+      allow update: if signedIn() && request.resource.data.name.size() <= 60 && (
+        request.auth.uid in resource.data.members
+        || (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members'])
+          && request.resource.data.members.diff(resource.data.members).affectedKeys().hasOnly([request.auth.uid])
+          && request.auth.uid in request.resource.data.members
+        )
+      );
+      allow delete: if false;
+
+      // Közös kedvenc receptek
+      match /favorites/{favId} {
+        allow read, delete: if isMember(listId);
+        allow create, update: if isMember(listId)
+          && request.resource.data.title is string
+          && request.resource.data.title.size() > 0
+          && request.resource.data.title.size() <= 120
+          && (!('url' in request.resource.data) || request.resource.data.url.size() <= 500);
+      }
+
+      match /items/{itemId} {
+        allow read, delete: if isMember(listId);
+        allow create, update: if isMember(listId)
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 100;
+      }
+    }
+  }
+}

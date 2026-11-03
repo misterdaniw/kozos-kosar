@@ -1,0 +1,94 @@
+# Közös Kosár – automatikus feltöltés a Firebase Hostingra
+# Minden push a main ágra: előkészíti a Firebase projektet (ha kell), és feltölti az appot + a Firestore szabályokat.
+# Kell hozzá egy titok (Settings → Secrets and variables → Actions): KOZOS_KOSAR_FIREBASE_SA
+# = az új Firebase projekt szolgáltatásfiók-kulcsa (JSON), Szerkesztő (Editor) szerepkörrel.
+name: Közös Kosár feltöltése
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: kozos-kosar-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Titok ellenőrzése
+        id: secret
+        env:
+          SA: ${{ secrets.KOZOS_KOSAR_FIREBASE_SA }}
+        run: |
+          # Csak nem titkos mezőket írunk ki (projekt, fiók e-mail), a kulcsot soha
+          check() { echo "$1" | tee -a "$GITHUB_WORKSPACE/secret-check.txt"; }
+          if [ -z "$SA" ]; then check "HIBA: a KOZOS_KOSAR_FIREBASE_SA titok üres vagy nincs beállítva (név elírva?)"; exit 1; fi
+          check "titok hossza: ${#SA} karakter"
+          if ! printf '%s' "$SA" | jq -e . >/dev/null 2>&1; then
+            check "HIBA: a titok nem érvényes JSON (lehet, hogy csak egy része lett bemásolva)"
+            check "eleje: $(printf '%s' "$SA" | head -c 15 | tr -c '[:alnum:]{}":_ \n-' '?')…"
+            exit 1
+          fi
+          for k in type project_id client_email; do check "$k: $(printf '%s' "$SA" | jq -r ".$k // \"HIÁNYZIK\"")"; done
+          printf '%s' "$SA" | jq -e '.private_key | length > 100' >/dev/null || { check "HIBA: hiányzik a private_key"; exit 1; }
+          check "private_key: megvan"
+
+      - uses: google-github-actions/auth@v2
+        id: auth
+        with:
+          credentials_json: ${{ secrets.KOZOS_KOSAR_FIREBASE_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Firebase CLI telepítése
+        id: cli
+        run: npm install -g firebase-tools@15
+
+      - name: Firebase projekt előkészítése
+        id: boot
+        run: bash scripts/bootstrap.sh 2>&1 | tee bootstrap.log; exit ${PIPESTATUS[0]}
+
+      - name: Feltöltés (Hosting + Firestore szabályok)
+        id: deploy
+        run: set -o pipefail; firebase deploy --only hosting,firestore:rules --project "${{ steps.boot.outputs.project_id }}" --non-interactive 2>&1 | tee deploy.log
+
+      - name: Kész
+        run: |
+          echo "## Kész! 🎉" >> "$GITHUB_STEP_SUMMARY"
+          echo "Az app címe: https://${{ steps.boot.outputs.project_id }}.web.app" >> "$GITHUB_STEP_SUMMARY"
+          echo "Az app címe: https://${{ steps.boot.outputs.project_id }}.web.app"
+
+      # Állapotjelentés egy külön ágra (deploy-status), hogy a futás eredménye a repóból is olvasható legyen
+      - name: Állapot mentése
+        if: always()
+        run: |
+          mkdir -p /tmp/st && cd /tmp/st
+          {
+            echo "result: ${{ job.status }}"
+            echo "run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "commit: ${{ github.sha }}"
+            echo "project: ${{ steps.boot.outputs.project_id }}"
+            echo "url: https://${{ steps.boot.outputs.project_id }}.web.app"
+            echo "time: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "steps: secret=${{ steps.secret.outcome }} auth=${{ steps.auth.outcome }} cli=${{ steps.cli.outcome }} boot=${{ steps.boot.outcome }} deploy=${{ steps.deploy.outcome }}"
+          } > status.txt
+          cp "$GITHUB_WORKSPACE/secret-check.txt" . 2>/dev/null || true
+          tail -60 "$GITHUB_WORKSPACE/bootstrap.log" > bootstrap-tail.txt 2>/dev/null || true
+          grep -iE "error|hiba|denied|permission|failed" "$GITHUB_WORKSPACE/deploy.log" 2>/dev/null | head -30 > deploy-errors.txt || true
+          grep -E "::(warning|error)::|Error|hiba|Nem sikerült" "$GITHUB_WORKSPACE/bootstrap.log" 2>/dev/null | head -40 > notes.txt || true
+          git init -q && git checkout -q -b deploy-status
+          git config user.name "github-actions" && git config user.email "actions@github.com"
+          git add . && git commit -qm "Feltöltés állapota: ${{ job.status }}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" deploy-status
