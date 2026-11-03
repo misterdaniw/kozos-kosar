@@ -56,7 +56,7 @@ Szabályok:
 - Ha a kérés nem egyértelmű, és a válasz lényegesen megváltoztatná a listát (pl. "valami vacsorát" vagy "sütit" – milyet?), adj vissza üres items listát, és a question mezőben kérdezz vissza röviden, az options mezőben 2-4 rövid válaszlehetőséggel. Apróságon (adagszám hiánya, márka) ne kérdezz.
 - Ha a kérés nem értelmezhető ételként vagy bevásárlásként, adj vissza üres items listát, és a note mezőben röviden írd le, mit vársz.`;
 
-const INTERPRET_PROMPT = `Egy magyar család bevásárlólistájához diktált szöveget dolgozol fel. A szöveg telefonos beszédfelismerésből jön: nincsenek írásjelek, lehetnek félrehallott szavak, a számok szóval is szerepelhetnek ("két kiló", "fél kiló", "tíz").
+const INTERPRET_PROMPT = `Egy magyar család bevásárlólistájához diktált vagy begépelt szöveget dolgozol fel. A szöveg gyakran telefonos beszédfelismerésből jön: hiányozhatnak az írásjelek, lehetnek félrehallott vagy elgépelt szavak, a számok szóval is szerepelhetnek ("két kiló", "fél kiló", "tíz").
 Feladat: bontsd külön bevásárlási tételekre.
 Szabályok:
 - name: boltban szokásos, rövid, alapalakú név kisbetűvel ("krumplit" → "krumpli", "két tejet" → "tej"). qty: mennyiség, ha elhangzott ("2 kg", "10 db", "50 dkg", "1 csomag"), különben üres. category: a megadott listából.
@@ -240,15 +240,17 @@ async function createFirebaseBackend(cfg) {
     const { getAI, getGenerativeModel, GoogleAIBackend, Schema } = await import(`${FIREBASE_CDN}/firebase-ai.js`);
     const ai = getAI(app, { backend: new GoogleAIBackend() });
     // Túlterhelés (500/503/429) esetén újrapróbálunk, majd a következő ingyenes modellre váltunk
-    const MODELS = [...new Set([cfg.model || "gemini-3.8-flash", ...(cfg.fallbackModels || ["gemini-3.7-flash", "gemini-3.5-flash-lite"])])];
+    const MODELS = [...new Set([cfg.model || "gemini-3.8-flash", ...(cfg.fallbackModels || ["gemini-3.5-flash-lite"])])];
+    // A lista értelmezéséhez a gyors modell megy elöl (pár tétel felbontásához bőven elég, és gyorsabban válaszol)
+    const FAST = [...new Set([cfg.fastModel || "gemini-3.5-flash-lite", ...MODELS])];
     const transient = (e) => /\b(500|503|429)\b|overload|high demand|unavailable|exhausted|internal|try again/i.test(`${e?.code || ""} ${e?.status || ""} ${e?.message || ""}`);
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-    const resilient = (opts) => {
+    const resilient = (opts, order = MODELS) => {
       const cache = {};
       return {
         async generateContent(req) {
           let last;
-          for (const [i, name] of MODELS.entries()) {
+          for (const [i, name] of order.entries()) {
             cache[name] ||= getGenerativeModel(ai, { ...opts, model: name });
             for (let attempt = 0; attempt < (i === 0 ? 2 : 1); attempt++) {
               try { return await cache[name].generateContent(req); }
@@ -274,7 +276,7 @@ async function createFirebaseBackend(cfg) {
           },
         }),
       },
-    });
+    }, FAST);
     const schema = Schema.object({
       properties: {
         title: Schema.string(),
@@ -693,10 +695,11 @@ async function handleAdd(text, { voice: spoken }) {
   }
   const local = parseSpoken(text);
   // Gépelt szöveget a helyi értelmező kezel (pontos), diktálásnál a Gemini segít, ha a helyi nem biztos benne
-  const askAI = spoken && backend.interpret && navigator.onLine !== false
-    && (!local.confident || (state.questions.length > 0 && !local.items.length && !local.questions.length));
+  // Mindig a Gemini értelmez (gépelve és diktálva is); a helyi értelmező csak tartalék, ha nincs net vagy a Gemini nem válaszol
+  const askAI = backend.interpret && navigator.onLine !== false;
   if (!askAI) return applyResult(local, { text, spoken });
   setBusy(1);
+  if (!voice.wantOn) toast("Értelmezem…");
   try {
     const r = await backend.interpret(text, state.questions, openItems().map((i) => i.name));
     applyResult(r, { text, spoken });
