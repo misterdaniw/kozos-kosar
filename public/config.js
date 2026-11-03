@@ -20,6 +20,8 @@ export default {
 
   // Gemini modell a Firebase AI Logic-on keresztül (Gemini Developer API, ingyenes Spark csomaggal is megy)
   model: "gemini-3.8-flash",
+  // Ha a fő modell túlterhelt, ezekkel próbálkozik sorban (mind ingyenes keretben használható)
+  fallbackModels: ["gemini-3.7-flash", "gemini-3.5-flash-lite"],
 
   // Recept keresése kimondott ételnévre a streetkitchen.hu és mindmegette.hu oldalon (Google Search grounding).
   // Csak Blaze (bankkártyás) Firebase-csomaggal működik; havi 5000 keresés ingyenes. Előtte maradjon false.

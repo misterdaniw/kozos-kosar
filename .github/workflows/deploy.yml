@@ -86,7 +86,7 @@ jobs:
           } > status.txt
           cp "$GITHUB_WORKSPACE/secret-check.txt" . 2>/dev/null || true
           tail -60 "$GITHUB_WORKSPACE/bootstrap.log" > bootstrap-tail.txt 2>/dev/null || true
-          grep -A2 "GEMINI_TEST" "$GITHUB_WORKSPACE/bootstrap.log" > gemini-test.txt 2>/dev/null || true
+          grep "GEMINI_TEST" "$GITHUB_WORKSPACE/bootstrap.log" > gemini-test.txt 2>/dev/null || true
           grep -iE "error|hiba|denied|permission|failed" "$GITHUB_WORKSPACE/deploy.log" 2>/dev/null | head -30 > deploy-errors.txt || true
           grep -E "::(warning|error)::|Error|hiba|Nem sikerült" "$GITHUB_WORKSPACE/bootstrap.log" 2>/dev/null | head -40 > notes.txt || true
           git init -q && git checkout -q -b deploy-status

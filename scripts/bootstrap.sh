@@ -105,10 +105,11 @@ echo "AI Logic API: $(jq -r '.state // "?"' /tmp/gl.json)"
 
 echo "== Gemini próbahívás (App Check token nélkül – a válasz mutatja, mi hiányzik még)"
 APIKEY="$(node -e 'import("./public/config.js").then(m=>console.log(m.default.firebase.apiKey))' 2>/dev/null || true)"
-MODEL="$(node -e 'import("./public/config.js").then(m=>console.log(m.default.model||"gemini-3.8-flash"))' 2>/dev/null || echo gemini-3.8-flash)"
-code=$(curl -sS -o /tmp/gem.json -w "%{http_code}" -X POST \
-  -H "Content-Type: application/json" -H "x-goog-api-key: $APIKEY" -H "X-Firebase-AppId: $APPID" \
-  "https://firebasevertexai.googleapis.com/v1beta/projects/$P/models/$MODEL:generateContent" \
-  -d '{"contents":[{"role":"user","parts":[{"text":"Mondj egy magyar csirkés ételt, csak a nevét."}]}]}')
-echo "GEMINI_TEST http=$code"
-jq -c '{error: .error.message, status: .error.status, reason: (.error.details // [] | map(.reason // empty) | join(",")), text: (.candidates[0].content.parts[0].text // null)}' /tmp/gem.json 2>/dev/null | cut -c1-600 || head -c 600 /tmp/gem.json
+MODELS="$(node -e 'import("./public/config.js").then(m=>console.log([m.default.model||"gemini-3.8-flash",...(m.default.fallbackModels||[])].join(" ")))' 2>/dev/null || echo gemini-3.8-flash)"
+for MODEL in $MODELS; do
+  code=$(curl -sS -o /tmp/gem.json -w "%{http_code}" -X POST \
+    -H "Content-Type: application/json" -H "x-goog-api-key: $APIKEY" -H "X-Firebase-AppId: $APPID" \
+    "https://firebasevertexai.googleapis.com/v1beta/projects/$P/models/$MODEL:generateContent" \
+    -d '{"contents":[{"role":"user","parts":[{"text":"Mondj egy magyar csirkés ételt, csak a nevét."}]}]}')
+  echo "GEMINI_TEST $MODEL http=$code $(jq -c '{error: .error.message, status: .error.status, text: (.candidates[0].content.parts[0].text // null)}' /tmp/gem.json 2>/dev/null | cut -c1-300)"
+done

@@ -239,9 +239,28 @@ async function createFirebaseBackend(cfg) {
     if (model) return model;
     const { getAI, getGenerativeModel, GoogleAIBackend, Schema } = await import(`${FIREBASE_CDN}/firebase-ai.js`);
     const ai = getAI(app, { backend: new GoogleAIBackend() });
+    // Túlterhelés (500/503/429) esetén újrapróbálunk, majd a következő ingyenes modellre váltunk
+    const MODELS = [...new Set([cfg.model || "gemini-3.8-flash", ...(cfg.fallbackModels || ["gemini-3.7-flash", "gemini-3.5-flash-lite"])])];
+    const transient = (e) => /\b(500|503|429)\b|overload|high demand|unavailable|exhausted|internal|try again/i.test(`${e?.code || ""} ${e?.status || ""} ${e?.message || ""}`);
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const resilient = (opts) => {
+      const cache = {};
+      return {
+        async generateContent(req) {
+          let last;
+          for (const [i, name] of MODELS.entries()) {
+            cache[name] ||= getGenerativeModel(ai, { ...opts, model: name });
+            for (let attempt = 0; attempt < (i === 0 ? 2 : 1); attempt++) {
+              try { return await cache[name].generateContent(req); }
+              catch (e) { last = e; if (!transient(e)) throw e; console.warn(`Gemini ${name} túlterhelt, újrapróbálom`, e?.message); await wait(700 * (attempt + 1)); }
+            }
+          }
+          throw last;
+        },
+      };
+    };
     const item = Schema.object({ properties: { name: Schema.string(), qty: Schema.string(), category: Schema.enumString({ enum: CATS }) } });
-    interpreter = getGenerativeModel(ai, {
-      model: cfg.model || "gemini-3.8-flash",
+    interpreter = resilient({
       systemInstruction: INTERPRET_PROMPT,
       generationConfig: {
         responseMimeType: "application/json",
@@ -275,14 +294,12 @@ async function createFirebaseBackend(cfg) {
       },
       optionalProperties: ["note", "question", "options"],
     });
-    model = getGenerativeModel(ai, {
-      model: cfg.model || "gemini-3.8-flash",
+    model = resilient({
       systemInstruction: SYSTEM_PROMPT,
       generationConfig: { responseMimeType: "application/json", responseSchema: schema },
     });
     // Receptötletek (ingyenes keret) és receptkeresés a két oldalon (Blaze + Google Search)
-    ideasModel = getGenerativeModel(ai, {
-      model: cfg.model || "gemini-3.8-flash",
+    ideasModel = resilient({
       systemInstruction: RECIPE_IDEAS_PROMPT,
       generationConfig: {
         responseMimeType: "application/json",
@@ -296,13 +313,13 @@ async function createFirebaseBackend(cfg) {
       },
     });
     if (cfg.recipeSearch) {
-      listModel = getGenerativeModel(ai, { model: cfg.model || "gemini-3.8-flash", systemInstruction: RECIPE_SEARCH_PROMPT, tools: [{ googleSearch: {} }] });
+      listModel = resilient({ systemInstruction: RECIPE_SEARCH_PROMPT, tools: [{ googleSearch: {} }] });
     }
     // Recept beolvasása linkből (URL context) – az ingyenes keretben is megy
-    urlModel = getGenerativeModel(ai, { model: cfg.model || "gemini-3.8-flash", systemInstruction: RECIPE_SOURCE_PROMPT, tools: [{ urlContext: {} }] });
+    urlModel = resilient({ systemInstruction: RECIPE_SOURCE_PROMPT, tools: [{ urlContext: {} }] });
     // Recept keresése a két oldalon (Google Search grounding) – csak Blaze csomaggal
     if (cfg.recipeSearch) {
-      searchModel = getGenerativeModel(ai, { model: cfg.model || "gemini-3.8-flash", systemInstruction: RECIPE_SOURCE_PROMPT, tools: [{ googleSearch: {} }, { urlContext: {} }] });
+      searchModel = resilient({ systemInstruction: RECIPE_SOURCE_PROMPT, tools: [{ googleSearch: {} }, { urlContext: {} }] });
     }
     return model;
   }
