@@ -18,7 +18,7 @@ echo "== API-k bekapcsolása"
 gcloud services enable \
   firebase.googleapis.com firebasehosting.googleapis.com firestore.googleapis.com firebaserules.googleapis.com \
   identitytoolkit.googleapis.com firebasevertexai.googleapis.com generativelanguage.googleapis.com \
-  firebaseappcheck.googleapis.com --project "$P" \
+  firebaseappcheck.googleapis.com recaptchaenterprise.googleapis.com --project "$P" \
   || warn "Nem minden API-t sikerült bekapcsolni. Kell a szolgáltatásfióknak a Szerkesztő (Editor) szerepkör."
 
 echo "== Firestore adatbázis"
@@ -73,3 +73,32 @@ if (next === src) { console.error("Nem találtam a firebase blokkot a config.js-
 fs.writeFileSync(path, next);
 console.log("config.js kitöltve:", sdk.projectId);
 NODE
+
+echo "== App Check (reCAPTCHA Enterprise) – a Gemini (AI Logic) védelméhez"
+TOKEN="$(gcloud auth print-access-token)"
+H=(-H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -H "x-goog-user-project: $P")
+KEYNAME="Közös Kosár web"
+SITEKEY="$(curl -sS "${H[@]}" "https://recaptchaenterprise.googleapis.com/v1/projects/$P/keys?pageSize=100" \
+  | jq -r --arg n "$KEYNAME" '.keys[]? | select(.displayName==$n) | .name | split("/") | last' | head -1)"
+if [ -z "$SITEKEY" ]; then
+  body=$(jq -n --arg n "$KEYNAME" --arg p "$P" '{displayName:$n, webSettings:{integrationType:"SCORE", allowedDomains:[($p+".web.app"),($p+".firebaseapp.com"),"localhost"]}}')
+  SITEKEY="$(curl -sS -X POST "${H[@]}" "https://recaptchaenterprise.googleapis.com/v1/projects/$P/keys" -d "$body" \
+    | tee /tmp/rk.json | jq -r '.name // empty | split("/") | last')"
+  [ -n "$SITEKEY" ] || { cat /tmp/rk.json; warn "Nem sikerült reCAPTCHA-kulcsot létrehozni."; }
+fi
+if [ -n "$SITEKEY" ]; then
+  echo "reCAPTCHA kulcs: $SITEKEY"
+  code=$(curl -sS -o /tmp/ac.json -w "%{http_code}" -X PATCH "${H[@]}" \
+    "https://firebaseappcheck.googleapis.com/v1/projects/$P/apps/$APPID/recaptchaEnterpriseConfig?updateMask=siteKey" \
+    -d "{\"siteKey\":\"$SITEKEY\"}")
+  if [ "$code" = "200" ]; then echo "App Check regisztrálva."; else cat /tmp/ac.json; warn "Az App Check regisztráció nem sikerült."; fi
+  SITEKEY="$SITEKEY" node -e '
+    const fs = require("fs"); const p = "public/config.js"; const s = fs.readFileSync(p, "utf8");
+    const n = s.replace(/appCheck:\s*\{[\s\S]*?\n  \},/, `appCheck: {\n    provider: "enterprise",\n    siteKey: "${process.env.SITEKEY}",\n  },`);
+    if (n === s) { console.error("Nem találtam az appCheck blokkot"); process.exit(1); }
+    fs.writeFileSync(p, n); console.log("config.js: App Check beállítva");'
+fi
+
+echo "== Gemini (AI Logic) állapota"
+code=$(curl -sS -o /tmp/gl.json -w "%{http_code}" "${H[@]}" "https://serviceusage.googleapis.com/v1/projects/$P/services/firebasevertexai.googleapis.com")
+echo "AI Logic API: $(jq -r '.state // "?"' /tmp/gl.json)"
