@@ -957,6 +957,7 @@ async function fetchRecipe() {
       ? "Az AI szolgáltatás elutasította a kérést (App Check). Ellenőrizd az App Check beállítást a README szerint."
       : R.url ? "Nem sikerült kiolvasni a receptet erről az oldalról. Próbáld újra, vagy oszd meg egy másik recept linkjét."
       : "Most nem sikerült elérni az AI-t. Ellenőrizd az internetkapcsolatot, és próbáld újra.";
+    $("#ai-note").textContent += errDetail(err);
     $("#ai-note").hidden = false;
   }
 }
@@ -1029,6 +1030,12 @@ rSheet.addEventListener("close", () => { if (voice.wantOn && voice.mode === "rse
 rSheet.addEventListener("click", (e) => { if (e.target === rSheet) rSheet.close(); });
 $("#rs-close").addEventListener("click", () => rSheet.close());
 
+// Rövid technikai részlet a hibaüzenet végére, hogy a hiba oka visszakereshető legyen
+function errDetail(err) {
+  const m = String(err?.code || "") + " " + String(err?.message || err || "");
+  return `\n(Hibakód: ${m.replace(/\s+/g, " ").trim().slice(0, 160)})`;
+}
+
 async function searchRecipes(query, { spoken = false } = {}) {
   const S = state.search;
   query = String(query).trim(); if (!query) return;
@@ -1039,6 +1046,7 @@ async function searchRecipes(query, { spoken = false } = {}) {
     const r = await backend.searchRecipes(query);
     if (S.query !== query) return;
     Object.assign(S, { results: r.recipes || [], loading: false, meta: r });
+    if (!S.results.length) console.warn("Üres receptlista", r);
     renderRecipes();
     if (spoken && voice.wantOn) {
       const n = S.results.length;
@@ -1048,7 +1056,7 @@ async function searchRecipes(query, { spoken = false } = {}) {
   } catch (err) {
     console.error(err);
     if (S.query !== query) return;
-    Object.assign(S, { loading: false, error: "Most nem sikerült keresni. Ellenőrizd az internetkapcsolatot, vagy keress közvetlenül az oldalakon." });
+    Object.assign(S, { loading: false, error: "Most nem sikerült keresni. Ellenőrizd az internetkapcsolatot, vagy keress közvetlenül az oldalakon." + errDetail(err) });
     renderRecipes();
   }
 }
