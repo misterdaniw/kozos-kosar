@@ -96,6 +96,7 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 /* Header */
 .top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); }
 .top .wrap { display: flex; align-items: center; gap: 12px; padding-block: 14px 10px; }
+.top .wrap + .wrap { padding-block: 0 2px; }
 .title-btn { flex: 1; min-width: 0; text-align: left; background: none; border: 0; padding: 0; }
 .hello { margin: 0; font: 600 14px/1.2 var(--f-display); color: var(--accent); letter-spacing: .01em; }
 .title-btn h1 {
@@ -424,8 +425,91 @@ dialog.sheet.tall .sheet-body { height: 100%; grid-template-rows: auto auto auto
 .rempty strong { color: var(--ink); font: 700 20px/1.2 var(--f-display); }
 #rs-mic.listening { animation: ring 1.4s ease-out infinite; }
 
+/* Main tabs: shopping / cooking */
+.main-tabs { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: var(--surface); padding: 4px; border-radius: 18px; margin-bottom: 10px; box-shadow: var(--shadow); }
+.main-tabs button {
+  border: 0; border-radius: 14px; padding: 10px; background: transparent; color: var(--muted);
+  font: 600 15.5px/1 var(--f-display); display: flex; justify-content: center; align-items: center; gap: 7px;
+}
+.main-tabs svg { width: 19px; height: 19px; }
+.main-tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); }
+.main-tabs b { background: var(--sun); color: var(--sun-ink); border-radius: 99px; padding: 2px 7px; font-size: 12.5px; }
+
+/* Cooking list */
+#cooking { margin-top: 12px; }
+.cook-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.cook-card { background: var(--surface); border-radius: var(--r); box-shadow: var(--shadow); overflow: hidden; }
+.cook-open { width: 100%; border: 0; background: transparent; text-align: left; display: flex; gap: 12px; padding: 12px; align-items: center; }
+.cook-thumb { width: 84px; height: 84px; border-radius: 16px; object-fit: cover; flex: none; background: var(--bg); }
+.cook-thumb.ph { display: grid; place-items: center; background: hsl(30 85% var(--tile-l)); color: hsl(30 65% var(--icon-l)); }
+.cook-thumb.ph svg { width: 36px; height: 36px; }
+.cook-body { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.cook-body strong { font: 600 18px/1.2 var(--f-display); overflow-wrap: anywhere; }
+.cook-meta, .cook-by { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; color: var(--muted); font-size: 13.5px; font-weight: 700; }
+.cook-meta svg { width: 15px; height: 15px; }
+.cook-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 0 12px 12px; }
+.cook-go { border: 0; border-radius: 99px; padding: 9px 14px; background: var(--sun); color: var(--sun-ink); font: 600 14.5px/1 var(--f-display); }
+a.rsite { text-decoration: none; }
+
+/* Recipe detail */
+.cook-sheet-body { grid-template-rows: auto auto 1fr auto !important; }
+#cook-body { overflow-y: auto; min-height: 0; display: grid; gap: 12px; align-content: start; }
+.cook-hero { width: 100%; max-height: 220px; object-fit: cover; border-radius: 18px; }
+.cook-src { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; color: var(--muted); font-weight: 700; font-size: 14px; }
+.cook-src span svg { width: 15px; height: 15px; vertical-align: -2px; margin-right: 3px; }
+#cook-body h4 { margin: 4px 0 0; font: 600 18px/1.2 var(--f-display); }
+.ing { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.ing li { display: flex; gap: 8px; align-items: baseline; padding: 6px 0; border-bottom: 1.5px dashed var(--line); font-weight: 600; }
+.ing .q { margin-left: auto; color: var(--muted); font: 600 14px/1 var(--f-display); white-space: nowrap; }
+.ing i { font-style: normal; font-size: 11.5px; background: var(--leaf); color: var(--leaf-ink); border-radius: 99px; padding: 2px 7px; }
+.steps { margin: 0; padding-left: 22px; display: grid; gap: 10px; }
+.steps li { font-weight: 600; line-height: 1.5; }
+.steps li::marker { font: 700 16px var(--f-display); color: var(--accent); }
+.step-img { display: block; width: 100%; max-height: 180px; object-fit: cover; border-radius: 14px; margin-top: 8px; }
+.credit { margin: 0; font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.credit a { color: var(--accent); }
+
+/* Step-by-step mode */
+dialog.step-mode {
+  border: 0; padding: 0; margin: 0; width: 100%; height: 100%; max-width: none; max-height: none;
+  background: var(--bg); color: var(--ink);
+}
+dialog.step-mode::backdrop { background: var(--bg); }
+.step-wrap {
+  height: 100%; display: grid; grid-template-rows: auto auto 1fr auto; gap: 14px; max-width: 720px; margin: 0 auto;
+  padding-top: calc(14px + env(safe-area-inset-top, 0px)); padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.step-top { display: flex; align-items: center; gap: 10px; }
+.step-head { flex: 1; min-width: 0; display: grid; gap: 4px; justify-items: start; }
+.step-head strong { font: 700 20px/1.2 var(--f-display); overflow-wrap: anywhere; }
+.step-voice { width: 48px; height: 48px; border-radius: 50%; border: 0; background: var(--surface); color: var(--ink); display: grid; place-items: center; flex: none; box-shadow: var(--shadow); }
+.step-voice svg { width: 22px; height: 22px; }
+.step-voice.on { background: var(--accent); color: var(--accent-ink); animation: micpulse 1.3s ease-in-out infinite; }
+.step-progress { display: grid; gap: 6px; font: 600 15px/1 var(--f-display); color: var(--muted); }
+.step-progress .bar { display: block; height: 8px; background: var(--surface); border-radius: 99px; overflow: hidden; }
+.step-progress i { display: block; height: 8px; background: var(--leaf); border-radius: 99px; transition: width .25s; }
+.step-main { overflow-y: auto; min-height: 0; display: grid; gap: 14px; align-content: start; }
+.step-big-img { width: 100%; max-height: 38dvh; object-fit: cover; border-radius: 20px; }
+#step-text { margin: 0; font: 600 clamp(22px, 6vw, 30px)/1.4 var(--f-display); text-wrap: pretty; }
+.step-nav { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; }
+.step-nav .btn { padding: 18px; font-size: 19px; }
+
+/* Numbered answer options */
+.qn { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--sun); color: var(--sun-ink); font: 700 12px/1 var(--f-display); margin-right: 6px; }
+
+/* Mic pulses continuously while listening */
+.send.listening, #rs-mic.listening { animation: micpulse 1.3s ease-in-out infinite !important; }
+@keyframes micpulse {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 hsl(8 90% 60% / .6); }
+  50% { transform: scale(1.12); box-shadow: 0 0 0 10px hsl(8 90% 60% / .18); }
+  100% { transform: scale(1); box-shadow: 0 0 0 16px hsl(8 90% 60% / 0); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
+  .send.listening, #rs-mic.listening, .step-voice.on { animation: micfade 1.6s ease-in-out infinite !important; box-shadow: 0 0 0 4px hsl(8 90% 60% / .35); }
+  @keyframes micfade { 50% { opacity: .55; } }
 }
 </style>
 </head>
@@ -473,10 +557,17 @@ dialog.sheet.tall .sheet-body { height: 100%; grid-template-rows: auto auto auto
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>
       </button>
     </div>
+    <div class="wrap">
+      <div class="main-tabs" role="tablist" aria-label="Nézet">
+        <button type="button" role="tab" id="tab-shop" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9.5h18l-2 10a2 2 0 0 1-2 1.6H7a2 2 0 0 1-2-1.6Z"/><path d="M8 9.5l3-6M16 9.5l-3-6"/></svg><span>Bevásárlás</span></button>
+        <button type="button" role="tab" id="tab-cook" aria-selected="false"><span>Főzés</span></button>
+      </div>
+    </div>
   </header>
   <main class="wrap">
     <p id="mode-banner" class="banner" hidden></p>
     <div id="groups"></div>
+    <div id="cooking" hidden></div>
   </main>
   <div class="composer">
     <div class="wrap">
@@ -539,6 +630,41 @@ dialog.sheet.tall .sheet-body { height: 100%; grid-template-rows: auto auto auto
     </div>
     <div id="rs-body" aria-live="polite"></div>
     <div id="rs-gsearch" hidden></div>
+  </div>
+</dialog>
+
+<!-- Recipe detail (Főzés) -->
+<dialog class="sheet tall" id="cook-sheet" aria-labelledby="cook-title">
+  <div class="sheet-body cook-sheet-body">
+    <div class="sheet-head">
+      <h3 id="cook-title">Recept</h3>
+      <button type="button" class="close-btn" id="cook-close" aria-label="Bezárás"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div id="cook-body"></div>
+    <div class="row">
+      <button class="btn danger" type="button" id="cook-done">Megfőztük, törölhető</button>
+      <button class="btn" type="button" id="cook-steps">Lépésről lépésre</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- Step-by-step cooking mode -->
+<dialog class="step-mode" id="step-sheet" aria-labelledby="step-title">
+  <div class="step-wrap">
+    <div class="step-top">
+      <button type="button" class="close-btn" id="step-close" aria-label="Kilépés a főzési módból"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <div class="step-head"><strong id="step-title"></strong><span id="step-src"></span></div>
+      <button type="button" class="step-voice" id="step-voice" aria-pressed="false" aria-label="Hangvezérlés: tovább, vissza, ismételd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5v4"/></svg></button>
+    </div>
+    <div class="step-progress"><span id="step-count"></span><div class="bar"><i id="step-bar"></i></div></div>
+    <div class="step-main">
+      <div id="step-img"></div>
+      <p id="step-text" aria-live="polite"></p>
+    </div>
+    <div class="step-nav">
+      <button type="button" class="btn ghost" id="step-prev">‹ Előző</button>
+      <button type="button" class="btn" id="step-next">Következő ›</button>
+    </div>
   </div>
 </dialog>
 

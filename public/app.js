@@ -1,7 +1,7 @@
 // Közös Kosár – közös családi bevásárlólista
 // Két háttér: Firebase (élő, valós idejű szinkron + Gemini AI) vagy demó (csak ezen az eszközön).
 
-import { CATS, norm, guessCategory, parseSpoken, matchAnswer, SKIP, parseServings, stripServings, scaleQty } from "./parser.js";
+import { CATS, norm, guessCategory, parseSpoken, matchAnswer, matchOption, splitStop, SKIP, parseServings, stripServings, scaleQty } from "./parser.js";
 
 const FIREBASE_CDN = "https://www.gstatic.com/firebasejs/13.1.0";
 const CAT_HUE = [135, 6, 208, 30, 44, 190, 268, 322, 222];
@@ -18,6 +18,13 @@ export const CAT_ICON = [
   svg('<path d="M9 10h6l1.2 3.2v7.3a1 1 0 0 1-1 1H8.8a1 1 0 0 1-1-1v-7.3Z"/><path d="M10 10V6h4.5l3 2"/><path d="M11.5 6V3.5h3"/><path d="M20 4.5v.01M21 8v.01M20 11.5v.01"/>'),
   svg('<path d="M4.5 8h15l-1.2 12.2a1.5 1.5 0 0 1-1.5 1.3H7.2a1.5 1.5 0 0 1-1.5-1.3Z"/><path d="M8.5 10.5V7a3.5 3.5 0 0 1 7 0v3.5"/>'),
 ];
+const ICON_POT = svg('<path d="M4 10h16v5.5a4.5 4.5 0 0 1-4.5 4.5h-7A4.5 4.5 0 0 1 4 15.5Z"/><path d="M2 10h20M9 4.5c0 1.2 1 1.2 1 2.5M13 4.5c0 1.2 1 1.2 1 2.5"/>');
+const EMPTY_POT = `<svg class="empty-art" viewBox="0 0 160 110" aria-hidden="true">
+  <path d="M60 22c0 6 6 6 6 13M76 18c0 6 6 6 6 13M92 22c0 6 6 6 6 13" stroke="hsl(208 70% 60%)" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <rect x="22" y="44" width="116" height="10" rx="5" fill="hsl(44 95% 55%)"/>
+  <path d="M32 54h96v26a20 20 0 0 1-20 20H52a20 20 0 0 1-20-20Z" fill="var(--accent)"/>
+  <circle cx="64" cy="74" r="4" fill="var(--surface)"/><circle cx="96" cy="74" r="4" fill="var(--surface)"/><path d="M70 84q10 8 20 0" stroke="var(--surface)" stroke-width="4" fill="none" stroke-linecap="round"/>
+</svg>`;
 const ICON_BASKET = svg('<path d="M3 9.5h18l-2 10a2 2 0 0 1-2 1.6H7a2 2 0 0 1-2-1.6Z"/><path d="M8 9.5l3-6M16 9.5l-3-6"/><path d="M8.5 15l2.5 2.5L16 13"/>');
 
 /* ---------- Segédek ---------- */
@@ -53,6 +60,7 @@ Szabályok:
 - staple=true azokra, amik a legtöbb háztartásban általában otthon vannak (só, bors, olaj, cukor, liszt, ecet, alap fűszerek). Vizet ne adj vissza.
 - A kategória a megadott listából legyen.
 - title: rövid cím, pl. "Lecsó, 4 adag".
+- steps: az elkészítés lépései röviden, saját szavaiddal (legfeljebb 10 lépés, mindegyik 1-3 mondat), a megadott létszámra. minutes: a teljes elkészítési idő percben.
 - Ha a kérés nem egyértelmű, és a válasz lényegesen megváltoztatná a listát (pl. "valami vacsorát" vagy "sütit" – milyet?), adj vissza üres items listát, és a question mezőben kérdezz vissza röviden, az options mezőben 2-4 rövid válaszlehetőséggel. Apróságon (adagszám hiánya, márka) ne kérdezz.
 - Ha a kérés nem értelmezhető ételként vagy bevásárlásként, adj vissza üres items listát, és a note mezőben röviden írd le, mit vársz.`;
 
@@ -74,11 +82,12 @@ Szabályok:
 - Állapítsd meg, hány főre vagy adagra szól az eredeti recept (originalServings; ha nem derül ki, 4), és számold át a mennyiségeket a megadott létszámra, boltban kapható kiszerelésre kerekítve.
 - name: rövid, boltban szokásos név kisbetűvel. qty: az átszámolt mennyiség. category ezek egyike: ${CATS.join(" | ")}.
 - staple=true azokra, amik a legtöbb háztartásban általában otthon vannak (só, bors, olaj, cukor, liszt, alap fűszerek). Vizet ne adj vissza.
-- Az elkészítés lépéseit ne add vissza, csak a hozzávalókat.
+- steps: az elkészítés lépései az oldal alapján, saját szavaiddal, tömören (legfeljebb 12 lépés, mindegyik 1-3 mondat), az eredeti sorrendben, a megadott létszámhoz igazítva. Ha egy lépéshez az oldalon saját kép tartozik, az image mezőbe írd a kép pontos (https) címét, különben hagyd üresen. Ne találj ki képcímet.
+- imageUrl: a recept fő képének pontos (https) címe, ha az oldalon szerepel, különben üres. minutes: a teljes elkészítési idő percben, ha kiderül, különben 0.
 - Ha az oldal nem recept, vagy nem tudtad beolvasni, az items legyen üres, és a note mezőben írd le röviden, mi a gond.
 - Ha az étel neve nagyon különböző recepteket takarhat (pl. "süti", "valami vacsora"), az items legyen üres, és kérdezz vissza: question + 2-4 rövid options.
 Válaszolj kizárólag egyetlen JSON objektummal, más szöveg nélkül, ebben a formában:
-{"title": "Lecsó", "sourceUrl": "https://...", "sourceSite": "Street Kitchen", "originalServings": 4, "items": [{"name": "lecsópaprika", "qty": "1 kg", "category": "Zöldség, gyümölcs", "staple": false}], "note": "", "question": "", "options": []}`;
+{"title": "Lecsó", "sourceUrl": "https://...", "sourceSite": "Street Kitchen", "originalServings": 4, "minutes": 40, "imageUrl": "https://...", "items": [{"name": "lecsópaprika", "qty": "1 kg", "category": "Zöldség, gyümölcs", "staple": false}], "steps": [{"text": "A hagymát apróra vágjuk, és az olajon üvegesre pároljuk.", "image": ""}], "note": "", "question": "", "options": []}`;
 
 const RECIPE_SEARCH_PROMPT = `Egy magyar család receptkeresője vagy. A felhasználó megad egy alapanyagot, ételtípust vagy hangulatot (pl. "csirke", "gyors vacsora", "leves", "sütemény", "vega").
 Keress hozzá recepteket kizárólag a streetkitchen.hu és a mindmegette.hu oldalon (pl. "csirke recept site:streetkitchen.hu", "csirke recept site:mindmegette.hu"), mindkét oldalról vegyesen.
@@ -98,6 +107,18 @@ const favKey = (r) => (r.url ? r.url.replace(/[?#].*$/, "").replace(/\/$/, "") :
 function siteOf(url) {
   try { const h = new URL(url).hostname.replace(/^www\./, ""); return RECIPE_SITES[h] || h; } catch { return ""; }
 }
+const httpsUrl = (u) => (typeof u === "string" && /^https:\/\/[^\s"'<>]+$/.test(u.trim()) ? u.trim().slice(0, 600) : "");
+function cleanSteps(steps) {
+  return (Array.isArray(steps) ? steps : []).map((x) => (typeof x === "string" ? { text: x } : x || {}))
+    .map((x) => ({ text: String(x.text || "").trim().slice(0, 700), image: httpsUrl(x.image) })).filter((x) => x.text).slice(0, 20);
+}
+// A recept forrásának címkéje – mindig megjelenik a receptnél és a hozzávalóknál
+function sourceLabel(sugg) {
+  if (sugg?.source?.url) return siteOf(sugg.source.url);
+  if (sugg?.demo) return "Demó recept";
+  return "Gemini (általános recept)";
+}
+
 function parseJsonLoose(text) {
   const t = String(text || "").replace(/```(?:json)?/g, "");
   const a = t.indexOf("{"), b = t.lastIndexOf("}");
@@ -114,6 +135,16 @@ const DEMO_RECIPES = {
   "rakott krumpli": [["burgonya", "1,5 kg", 0], ["tojás", "6 db", 2], ["parasztkolbász", "20 dkg", 1], ["tejföl", "450 g", 2], ["vaj", "5 dkg", 2], ["só", "", 4, true]],
   "paprikás csirke": [["csirkecomb", "1,2 kg", 1], ["vöröshagyma", "2 db", 0], ["tv paprika", "1 db", 0], ["paradicsom", "1 db", 0], ["tejföl", "330 g", 2], ["finomliszt", "", 4, true], ["tojás", "2 db", 2], ["pirospaprika", "", 4, true], ["olaj", "", 4, true]],
   "rántott csirke": [["csirkemell", "60 dkg", 1], ["tojás", "3 db", 2], ["zsemlemorzsa", "25 dkg", 3], ["finomliszt", "", 4, true], ["burgonya", "1 kg", 0], ["olaj", "", 4, true]],
+};
+
+const DEMO_STEPS = {
+  "lecsó": ["A hagymát vágd félkarikára, és pirítsd üvegesre kevés olajon.", "Add hozzá a karikázott kolbászt, majd a felcsíkozott paprikát, és párold 10 percig.", "Jöjjön a felkockázott paradicsom, sózd, szórd meg pirospaprikával, és főzd további 10 percig.", "A végén üsd bele a tojásokat, és kevergetve hagyd összesülni."],
+  "paprikás csirke": ["A hagymát pirítsd üvegesre, húzd le a tűzről, és keverd bele a pirospaprikát.", "Tedd bele a csirkecombokat, a felkockázott paprikát és paradicsomot, öntsd fel kevés vízzel.", "Fedő alatt főzd puhára, kb. 40 percig.", "A tejfölt keverd simára egy kanál liszttel, húzd be vele a szaftot, és forrald össze.", "Közben főzd ki a nokedlit a lisztből, tojásból és vízből."],
+  "rántott csirke": ["Szeleteld fel és klopfold ki a csirkemellet, sózd meg.", "Forgasd lisztbe, felvert tojásba, majd zsemlemorzsába.", "Bő, forró olajban süsd mindkét oldalát aranybarnára.", "Közben főzd meg a krumplit köretnek."],
+  "palacsinta": ["Keverd csomómentesre a lisztet a tojással és a tejjel, majd hígítsd a szódavízzel.", "Pihentesd a tésztát 15 percig.", "Forró, kiolajozott serpenyőben süsd vékonyra a palacsintákat.", "Töltsd meg lekvárral, és tekerd fel."],
+  "gulyás": ["A hagymát pirítsd meg, add hozzá a kockára vágott húst, és pirítsd körbe.", "Szórd meg pirospaprikával, köménymaggal, öntsd fel vízzel, és főzd 1 órát.", "Add hozzá a répákat és a burgonyát, és főzd puhára.", "Végül tedd bele a paprikát és a paradicsomot, és forrald össze."],
+  "bolognai": ["A hagymát, fokhagymát és répát vágd apróra, és párold meg olívaolajon.", "Add hozzá a darált húst, és pirítsd morzsásra.", "Öntsd fel a passatával, és lassú tűzön főzd 30 percig.", "Közben főzd ki a spagettit, és tálald reszelt parmezánnal."],
+  "rakott krumpli": ["Főzd meg héjában a krumplit és a tojásokat, majd hámozd meg és karikázd fel.", "Egy kivajazott tálba rétegezd a krumplit, tojást és kolbászt, minden réteget locsolj meg tejföllel.", "A tetejére krumpli és tejföl kerüljön.", "200 fokon süsd 30 percig, amíg a teteje szép pirosra sül."],
 };
 
 // Demó receptötletek a keresőhöz: [cím, kulcsszavak, leírás, perc]
@@ -146,14 +177,15 @@ function createDemoBackend() {
     uid,
     async createList(name, me, seed = []) {
       const id = "demo-" + rid();
-      LS.set(KEY(id), { name, members: { [uid]: me.name }, items: seed.map((s) => ({ id: rid(), ...s })), favorites: [] });
+      LS.set(KEY(id), { name, members: { [uid]: me.name }, items: seed.map((s) => ({ id: rid(), ...s })), favorites: [], cooking: [] });
       return id;
     },
     async joinList(id, me) { await mutate(id, (d) => { d.members[uid] = me.name; }); },
     async leaveList(id) { await mutate(id, (d) => { delete d.members[uid]; }); },
     async renameList(id, name, me) { await mutate(id, (d) => { d.name = name; d.members[uid] = me.name; }); },
-    watch(id, onList, onItems, onError, onFavs) {
+    watch(id, onList, onItems, onError, onFavs, onCook) {
       const cb = (d) => {
+        if (d) onCook?.((d.cooking || []).slice().sort((a, b) => b.createdAt - a.createdAt));
         if (!d) return onError(new Error("not-found"));
         onList({ name: d.name, members: d.members });
         onItems(d.items.slice());
@@ -170,6 +202,8 @@ function createDemoBackend() {
       return ids;
     },
     interpret: null, // demó módban csak a helyi értelmező fut
+    async addCooking(id, r) { const cid = rid(); await mutate(id, (d) => { (d.cooking ||= []).push({ id: cid, createdAt: Date.now(), ...r }); }); return cid; },
+    async removeCooking(id, cid) { await mutate(id, (d) => { d.cooking = (d.cooking || []).filter((c) => c.id !== cid); }); },
     async addFavorite(id, fav) { const fid = rid(); await mutate(id, (d) => { (d.favorites ||= []).push({ id: fid, createdAt: Date.now(), ...fav }); }); return fid; },
     async removeFavorite(id, favId) { await mutate(id, (d) => { d.favorites = (d.favorites || []).filter((f) => f.id !== favId); }); },
     async searchRecipes(query) {
@@ -194,8 +228,9 @@ function createDemoBackend() {
       }
       const merged = new Map();
       const f = servings / 4;
+      const steps = hits.flatMap((k) => (DEMO_STEPS[k] || []).map((text) => ({ text, image: "" })));
       hits.forEach((k) => DEMO_RECIPES[k].forEach(([name, qty, c, staple]) => { if (!merged.has(name)) merged.set(name, { name, qty: scaleQty(qty, f), category: CATS[c], staple: !!staple }); }));
-      return { title: hits.map((h) => h[0].toUpperCase() + h.slice(1)).join(" + "), items: [...merged.values()], originalServings: 4,
+      return { title: hits.map((h) => h[0].toUpperCase() + h.slice(1)).join(" + "), items: [...merged.values()], originalServings: 4, steps, demo: true, minutes: 0,
         note: "Demó recept. A beállított appban a Street Kitchen vagy a Mindmegette receptjéből dolgozik." };
     },
   };
@@ -233,6 +268,7 @@ async function createFirebaseBackend(cfg) {
   const listRef = (id) => fs.doc(db, "lists", id);
   const itemsRef = (id) => fs.collection(db, "lists", id, "items");
   const favsRef = (id) => fs.collection(db, "lists", id, "favorites");
+  const cookRef = (id) => fs.collection(db, "lists", id, "cooking");
 
   let model = null, interpreter = null, urlModel = null, searchModel = null, ideasModel = null, listModel = null;
   async function getModel() {
@@ -283,6 +319,8 @@ async function createFirebaseBackend(cfg) {
         note: Schema.string(),
         question: Schema.string(),
         options: Schema.array({ items: Schema.string() }),
+        minutes: Schema.integer(),
+        steps: Schema.array({ items: Schema.object({ properties: { text: Schema.string() } }) }),
         items: Schema.array({
           items: Schema.object({
             properties: {
@@ -294,7 +332,7 @@ async function createFirebaseBackend(cfg) {
           }),
         }),
       },
-      optionalProperties: ["note", "question", "options"],
+      optionalProperties: ["note", "question", "options", "minutes", "steps"],
     });
     model = resilient({
       systemInstruction: SYSTEM_PROMPT,
@@ -337,7 +375,10 @@ async function createFirebaseBackend(cfg) {
     async joinList(id, me) { await fs.updateDoc(listRef(id), { [`members.${user.uid}`]: me.name }); },
     async leaveList(id) { await fs.updateDoc(listRef(id), { [`members.${user.uid}`]: fs.deleteField() }); },
     async renameList(id, name, me) { await fs.updateDoc(listRef(id), { name, [`members.${user.uid}`]: me.name }); },
-    watch(id, onList, onItems, onError, onFavs) {
+    watch(id, onList, onItems, onError, onFavs, onCook) {
+      const k = onCook ? fs.onSnapshot(fs.query(cookRef(id), fs.orderBy("createdAt", "desc")), (qs) => {
+        onCook(qs.docs.map((d) => { const x = d.data({ serverTimestamps: "estimate" }); return { id: d.id, ...x, createdAt: x.createdAt?.toMillis?.() ?? Date.now() }; }));
+      }, (e) => console.warn("főzés", e)) : () => {};
       const c = onFavs ? fs.onSnapshot(fs.query(favsRef(id), fs.orderBy("createdAt", "desc")), (qs) => {
         onFavs(qs.docs.map((d) => { const x = d.data({ serverTimestamps: "estimate" }); return { id: d.id, ...x, createdAt: x.createdAt?.toMillis?.() ?? Date.now() }; }));
       }, (e) => console.warn("kedvencek", e)) : () => {};
@@ -348,7 +389,7 @@ async function createFirebaseBackend(cfg) {
           return { id: d.id, ...x, createdAt: x.createdAt?.toMillis?.() ?? Date.now() };
         }));
       }, onError);
-      return () => { a(); b(); c(); };
+      return () => { a(); b(); c(); k(); };
     },
     async addItems(id, items) {
       const batch = fs.writeBatch(db);
@@ -358,6 +399,12 @@ async function createFirebaseBackend(cfg) {
       return refs.map((r) => r.id); // offline is azonnal visszatér, a Firestore később szinkronizál
     },
     async updateItem(id, itemId, patch) { await fs.updateDoc(fs.doc(itemsRef(id), itemId), patch); },
+    async addCooking(id, r) {
+      const ref = fs.doc(cookRef(id));
+      fs.setDoc(ref, { ...r, createdAt: fs.serverTimestamp() }).catch((e) => { console.error(e); toast("Nem sikerült elmenteni a receptet a Főzés fülre."); });
+      return ref.id;
+    },
+    async removeCooking(id, cid) { await fs.deleteDoc(fs.doc(cookRef(id), cid)); },
     async addFavorite(id, fav) {
       const ref = fs.doc(favsRef(id));
       fs.setDoc(ref, { ...fav, createdAt: fs.serverTimestamp() }).catch((e) => { console.error(e); toast("Nem sikerült menteni a kedvencet."); });
@@ -391,7 +438,8 @@ async function createFirebaseBackend(cfg) {
       const tidy = (data, extra = {}) => ({
         title: data.title || prompt, items: Array.isArray(data.items) ? data.items : [], note: data.note || "",
         question: data.question || "", options: Array.isArray(data.options) ? data.options.slice(0, 4) : [],
-        originalServings: +data.originalServings || null, ...extra,
+        originalServings: +data.originalServings || null, minutes: +data.minutes || 0,
+        steps: cleanSteps(data.steps), imageUrl: httpsUrl(data.imageUrl), ...extra,
       });
       if (url || searchModel) {
         const ask = url
@@ -426,7 +474,7 @@ async function createFirebaseBackend(cfg) {
 }
 
 /* ---------- Alkalmazás ---------- */
-const state = { listId: null, list: null, items: [], favorites: [], unwatch: null, suggestion: null, seen: new Set(), firstLoad: true, questions: [], busy: 0, autoTried: false,
+const state = { listId: null, list: null, items: [], favorites: [], cooking: [], tab: "shop", unwatch: null, suggestion: null, seen: new Set(), firstLoad: true, questions: [], busy: 0, autoTried: false,
   search: { query: "", results: [], loading: false, tab: "search", meta: null } };
 const settings = { autoListen: LS.get("kk:autoListen", true), speak: LS.get("kk:speak", true) };
 let backend;
@@ -537,7 +585,8 @@ function openList(id) {
     },
     (items) => { state.items = items; renderItems(); },
     (err) => { console.error(err); leaveToOnboarding("Ez a lista már nem érhető el."); },
-    (favs) => { state.favorites = favs; renderRecipes(); renderAiFav(); });
+    (favs) => { state.favorites = favs; renderRecipes(); renderAiFav(); },
+    (cook) => { state.cooking = cook; renderCooking(); });
   // Alapból hanggal: megnyitáskor rögtön elindul a hallgatás (ha a böngésző engedi)
   if (state.pendingShare) { const sh = state.pendingShare; state.pendingShare = null; state.autoTried = true; setTimeout(() => runSuggest(sh), 400); }
   if (settings.autoListen && SR && !state.autoTried && !window.KK_DEMO_ONLY) { state.autoTried = true; setTimeout(() => startListening({ auto: true }), 600); }
@@ -574,8 +623,8 @@ const ICON_X = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strok
 function itemHTML(it, fresh) {
   const meta = (it.by ? `${face(it.by, "mini")}<span>${esc(it.by)}</span>` : "")
     + (it.source ? (it.sourceUrl && /^https:\/\//.test(it.sourceUrl)
-      ? `<a class="from" href="${esc(it.sourceUrl)}" target="_blank" rel="noopener">${esc(it.source)}</a>`
-      : `<span class="from">${esc(it.source)}</span>`) : "");
+      ? `<a class="from" href="${esc(it.sourceUrl)}" target="_blank" rel="noopener">${esc(it.source)}${it.sourceSite ? ` · ${esc(it.sourceSite)}` : ""}</a>`
+      : `<span class="from">${esc(it.source)}${it.sourceSite ? ` · ${esc(it.sourceSite)}` : ""}</span>`) : "");
   return `<li class="item${it.done ? " done" : ""}${fresh ? " fresh" : ""}" data-id="${esc(it.id)}">
     <button class="check" data-act="toggle" aria-pressed="${!!it.done}" aria-label="${it.done ? "Visszarakás a listára" : "Megvettem"}: ${esc(it.name)}">${ICON_CHECK}</button>
     <div class="item-main">
@@ -648,7 +697,7 @@ function updateSendBtn() {
   const typed = $("#q").value.trim().length > 0;
   const btn = $("#send");
   btn.classList.toggle("listening", voice.wantOn);
-  if (voice.wantOn) { btn.innerHTML = ICON_STOP; btn.setAttribute("aria-label", "Hallgatás befejezése"); }
+  if (voice.wantOn) { btn.innerHTML = ICON_MIC; btn.setAttribute("aria-label", "Hallgatlak – koppints a befejezéshez"); }
   else if (!typed && SR) { btn.innerHTML = ICON_MIC; btn.setAttribute("aria-label", "Diktálás"); }
   else { btn.innerHTML = ICON_PLUS; btn.setAttribute("aria-label", "Hozzáadás"); }
   $("#q").placeholder = voice.wantOn ? "Hallgatlak… (gépelni is lehet)"
@@ -756,9 +805,9 @@ function renderQuestions() {
   box.hidden = false;
   box.innerHTML = `<div class="qcard">
     <div class="qhead"><span class="qbadge" aria-hidden="true">?</span><strong>${esc(q.question)}</strong>${q.qty ? `<span class="qqty">${esc(q.qty)}</span>` : ""}</div>
-    <div class="qopts">${q.options.map((o, i) => `<button type="button" data-opt="${i}">${esc(o)}</button>`).join("")}
+    <div class="qopts">${q.options.map((o, i) => `<button type="button" data-opt="${i}"><span class="qn">${i + 1}</span>${esc(o)}</button>`).join("")}
       <button type="button" class="skip" data-skip>Nem kell</button></div>
-    ${state.questions.length > 1 ? `<p class="qmore">Még ${state.questions.length - 1} kérdésem van</p>` : ""}
+    <p class="qmore">${SR ? "Koppints, vagy mondd ki: „a kaliforniait”, „a kettes”, „mindegy”, „nem kell”." : ""}${state.questions.length > 1 ? ` Még ${state.questions.length - 1} kérdésem van.` : ""}</p>
   </div>`;
 }
 $("#questions").addEventListener("click", (e) => {
@@ -785,7 +834,7 @@ function setListenUI() {
   $("#rs-mic").classList.toggle("listening", on && voice.mode === "rsearch");
   updateSendBtn();
   if (!on) return;
-  $("#listen-status").textContent = state.busy ? "Gondolkodom…" : voice.speaking ? "Kérdezek…" : voice.mode === "servings" ? "Hány főre főzöl?" : voice.mode === "rsearch" ? "Mondd, mit keresel!" : "Hallgatlak, mondd sorban!";
+  $("#listen-status").textContent = state.busy ? "Gondolkodom…" : voice.speaking ? "Kérdezek…" : voice.mode === "servings" ? "Hány főre főzöl?" : voice.mode === "rsearch" ? "Mondd, mit keresel!" : voice.mode === "aiq" ? "Melyiket választod?" : voice.mode === "steps" ? "Mondd: „tovább”, „vissza”, „ismételd”" : state.questions.length ? "Mondd ki, melyik kell!" : "Hallgatlak, mondd sorban! A végén: „ennyi”.";
   $("#rs-mic").classList.toggle("listening", on && voice.mode === "rsearch");
 }
 function setBusy(d) { state.busy = Math.max(0, state.busy + d); setListenUI(); }
@@ -797,12 +846,12 @@ function setHeard(text, result) {
 function startListening({ auto = false, mode = "add" } = {}) {
   if (!SR) { toast("Ez a böngésző nem támogatja a diktálást. Androidon használd a Chrome-ot."); return; }
   voice.wantOn = true; voice.mode = mode; voice.lastHeard = Date.now(); voice.restarts = 0; voice.auto = auto;
-  $("#listen-text").textContent = "pl. „két kiló krumpli, tej meg tíz tojás”";
+  $("#listen-text").textContent = mode === "steps" ? "pl. „tovább”, „vissza”, „ismételd”, „ennyi”" : "pl. „két kiló krumpli… tej… tíz tojás… ennyi”";
   setListenUI();
   runRecognizer();
   clearInterval(voice.idle);
   voice.idle = setInterval(() => {
-    if (voice.wantOn && !voice.speaking && !state.busy && Date.now() - voice.lastHeard > IDLE_MS) {
+    if (voice.wantOn && voice.mode !== "steps" && !voice.speaking && !state.busy && Date.now() - voice.lastHeard > IDLE_MS) {
       stopListening(); toast("Szüneteltem a hallgatást. Koppints a mikrofonra, ha még van valami.");
     }
   }, 1000);
@@ -822,6 +871,22 @@ function runRecognizer() {
       voice.lastHeard = Date.now();
       if (r.isFinal) {
         voice.auto = false;
+        if (voice.mode === "steps") { onStepSpeech(txt); return; }
+        // „ennyi”, „kész”, „vége” → a diktálás vége (ami előtte elhangzott, még felkerül)
+        const { rest, stop } = splitStop(txt);
+        if (stop) {
+          if (rest && voice.mode === "add") { setHeard(rest, ""); handleAdd(rest, { voice: true }); }
+          stopListening();
+          toast(rest ? "Rendben, ennyi volt. Befejeztem a hallgatást." : "Rendben, befejeztem a hallgatást.");
+          return;
+        }
+        if (voice.mode === "aiq") {
+          const ans = matchOption(state.aiOptions || [], txt);
+          if (ans && ans !== SKIP) { stopListening(); $(`#ai-q button[data-opt="${CSS.escape(ans)}"]`)?.click(); }
+          else if (ans === SKIP) { stopListening(); aiSheet.close(); }
+          else speak("Nem értettem. Melyiket választod?");
+          return;
+        }
         if (voice.mode === "rsearch") { onSearchSpeech(txt); return; }
         if (voice.mode === "servings") {
           const n = parseServings(txt, { bare: true });
@@ -877,7 +942,7 @@ function speak(text) {
 }
 function speakQuestion() {
   const q = state.questions[0]; if (!q) return;
-  speak(`${q.question} ${q.options.join(", vagy ")}?`);
+  speak(`${q.question} ${q.options.map((o, i) => `${i + 1}: ${o}`).join(", ")}?`);
 }
 
 $("#listen-stop").addEventListener("click", stopListening);
@@ -941,8 +1006,10 @@ async function fetchRecipe() {
       $("#ai-source").innerHTML = `Forrás: <a href="${esc(res.source.url)}" target="_blank" rel="noopener">${esc(res.source.site)}${res.source.title ? ` – ${esc(res.source.title)}` : ""}</a>`
         + (res.originalServings && res.originalServings !== R.servings ? `<br><small>Az eredeti recept ${res.originalServings} főre szól, ${R.servings} főre számoltam át.</small>` : "");
       $("#ai-source").hidden = false;
-    } else if (res.generic && !R.url) {
-      notes.push("Általános recept alapján. Ha a Street Kitchen vagy a Mindmegette receptjét szeretnéd, oszd meg a recept linkjét az appal.");
+    } else {
+      $("#ai-source").innerHTML = `Forrás: <b>${esc(sourceLabel(res))}</b>`
+        + (res.generic ? `<br><small>Ha a Street Kitchen vagy a Mindmegette receptjét szeretnéd, oszd meg a recept linkjét az appal.</small>` : "");
+      $("#ai-source").hidden = false;
     }
     if (res.searchEntryPoint) { // Google Search javaslatok – kötelező megjeleníteni
       const host = $("#ai-gsearch");
@@ -954,8 +1021,11 @@ async function fetchRecipe() {
     if (notes.length) { $("#ai-note").textContent = notes.join(" "); $("#ai-note").hidden = false; }
     if (res.question && res.options?.length) {
       $("#ai-q").innerHTML = `<div class="qhead"><span class="qbadge" aria-hidden="true">?</span><strong>${esc(res.question)}</strong></div>
-        <div class="qopts">${res.options.map((o) => `<button type="button" data-opt="${esc(o)}">${esc(o)}</button>`).join("")}</div>`;
+        <div class="qopts">${res.options.map((o, i) => `<button type="button" data-opt="${esc(o)}"><span class="qn">${i + 1}</span>${esc(o)}</button>`).join("")}</div>
+        <p class="qmore">${SR ? "Koppints, vagy mondd ki (pl. „a kettes”)." : ""}</p>`;
       $("#ai-q").hidden = false;
+      state.aiOptions = res.options.slice();
+      if (SR && R.spoken) { if (!voice.wantOn) startListening({ mode: "aiq" }); else voice.mode = "aiq"; speak(`${res.question} ${res.options.map((o, i) => `${i + 1}: ${o}`).join(", ")}.`); }
     }
     if (!res.items.length) return;
     $("#ai-list").innerHTML = res.items.map((it, i) => {
@@ -1195,15 +1265,167 @@ $("#ai-add").addEventListener("click", async () => {
   const items = picked.map((it) => ({
     name: String(it.name || "").slice(0, 100), qty: String(it.qty || "").slice(0, 30),
     category: CATS.includes(it.category) ? it.category : guessCategory(it.name),
-    done: false, by: me.name, source, ...(sourceUrl ? { sourceUrl } : {}),
+    done: false, by: me.name, source, sourceSite: sourceLabel(s), ...(sourceUrl ? { sourceUrl } : {}),
   }));
   $("#ai-add").disabled = true;
   try {
     await backend.addItems(state.listId, items);
+    // A recept a Főzés fülre is felkerül (összes hozzávalóval és a lépésekkel)
+    await backend.addCooking(state.listId, {
+      title: source || "Recept", servings: state.recipe?.servings || 4, minutes: s.minutes || 0,
+      sourceSite: sourceLabel(s), sourceUrl, image: s.imageUrl || "",
+      ingredients: s.items.slice(0, 60).map((it) => ({ name: String(it.name || "").slice(0, 100), qty: String(it.qty || "").slice(0, 30) })),
+      steps: (s.steps || []).slice(0, 20), by: me.name,
+    });
     aiSheet.close();
-    toast(`${items.length} hozzávaló felkerült a listára`);
+    toast(`${items.length} hozzávaló felkerült a listára, a recept pedig a Főzés fülre`, { label: "Megnézem", run: () => setTab("cook") });
   } catch (err) { console.error(err); toast("Nem sikerült hozzáadni. Próbáld újra."); $("#ai-add").disabled = false; }
 });
+
+
+/* ---------- Főzés fül: a hozzávalókkal feltett receptek, lépésről lépésre ---------- */
+const ICON_CLOCK = svg('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>');
+const ICON_PEOPLE = svg('<circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.2A4.5 4.5 0 0 1 21 18.5"/>');
+
+function setTab(tab) {
+  state.tab = tab;
+  $("#tab-shop").setAttribute("aria-selected", String(tab === "shop"));
+  $("#tab-cook").setAttribute("aria-selected", String(tab === "cook"));
+  $("#groups").hidden = tab !== "shop";
+  $("#cooking").hidden = tab !== "cook";
+  $(".composer").hidden = tab !== "shop";
+  if (tab === "cook" && voice.wantOn && voice.mode === "add") stopListening();
+  renderCooking();
+  window.scrollTo({ top: 0 });
+}
+$("#tab-shop").addEventListener("click", () => setTab("shop"));
+$("#tab-cook").addEventListener("click", () => setTab("cook"));
+
+function sourceChip(site, url) {
+  const cls = site === "Street Kitchen" ? "sk" : site === "Mindmegette" ? "mm" : "idea";
+  const label = esc(site || "Ismeretlen forrás");
+  return url && /^https:\/\//.test(url)
+    ? `<a class="rsite ${cls}" href="${esc(url)}" target="_blank" rel="noopener">${label} ↗</a>`
+    : `<span class="rsite ${cls}">${label}</span>`;
+}
+const recipeImg = (src, cls) => (src ? `<img class="${cls}" src="${esc(src)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : "");
+
+function renderCooking() {
+  const n = state.cooking.length;
+  $("#tab-cook").innerHTML = `${ICON_POT}<span>Főzés</span>${n ? `<b>${n}</b>` : ""}`;
+  if (state.tab !== "cook") return;
+  if (!n) {
+    $("#cooking").innerHTML = `<div class="empty">${EMPTY_POT}<strong>Még nincs mit főzni</strong><span>Ha egy recept hozzávalóit felteszed a listára, a recept ide kerül, és lépésről lépésre követheted.</span></div>`;
+    return;
+  }
+  $("#cooking").innerHTML = `<ul class="cook-list">${state.cooking.map((r, i) => `
+    <li class="cook-card">
+      <button type="button" class="cook-open" data-cook="${i}">
+        ${r.image ? recipeImg(r.image, "cook-thumb") : `<span class="cook-thumb ph" aria-hidden="true">${ICON_POT}</span>`}
+        <span class="cook-body">
+          <strong>${esc(r.title)}</strong>
+          <span class="cook-meta">${ICON_PEOPLE}${r.servings || 4} fő${r.minutes ? ` ${ICON_CLOCK}${r.minutes} perc` : ""}${r.steps?.length ? ` · ${r.steps.length} lépés` : ""}</span>
+          <span class="cook-by">${r.by ? `${face(r.by, "mini")}${esc(r.by)} tette fel` : ""}</span>
+        </span>
+      </button>
+      <div class="cook-foot">${sourceChip(r.sourceSite, r.sourceUrl)}
+        ${r.steps?.length ? `<button type="button" class="cook-go" data-steps="${i}">Főzés lépésről lépésre ›</button>` : ""}</div>
+    </li>`).join("")}</ul>`;
+}
+$("#cooking").addEventListener("click", (e) => {
+  const st = e.target.closest("[data-steps]"); if (st) return openSteps(state.cooking[+st.dataset.steps]);
+  const o = e.target.closest("[data-cook]"); if (o) return openCookSheet(state.cooking[+o.dataset.cook]);
+});
+
+/* Recept részletei */
+const cookSheet = $("#cook-sheet");
+let cookOpen = null, cookDelArmed = false;
+function openCookSheet(r) {
+  if (!r) return;
+  cookOpen = r; cookDelArmed = false;
+  const onList = new Set(state.items.map((i) => norm(i.name)));
+  $("#cook-body").innerHTML = `
+    ${recipeImg(r.image, "cook-hero")}
+    <div class="cook-src">${sourceChip(r.sourceSite, r.sourceUrl)}<span>${ICON_PEOPLE}${r.servings || 4} fő${r.minutes ? ` · ${r.minutes} perc` : ""}</span></div>
+    <h4>Hozzávalók</h4>
+    <ul class="ing">${(r.ingredients || []).map((it) => `<li><span>${esc(it.name)}</span><span class="q">${esc(it.qty || "")}</span>${onList.has(norm(it.name)) ? `<i class="on" title="A listán">listán</i>` : ""}</li>`).join("")}</ul>
+    <h4>Elkészítés</h4>
+    ${r.steps?.length ? `<ol class="steps">${r.steps.map((x) => `<li>${esc(x.text)}${recipeImg(x.image, "step-img")}</li>`).join("")}</ol>`
+      : `<p class="rhint">Ehhez a recepthez nincsenek lépések.${r.sourceUrl ? " Az eredeti receptet a forrás linkjén találod." : ""}</p>`}
+    <p class="credit">Recept${r.image ? " és kép" : ""}: ${esc(r.sourceSite || "")}${r.sourceUrl ? ` – <a href="${esc(r.sourceUrl)}" target="_blank" rel="noopener">eredeti recept ↗</a>` : ""}. A lépések az eredeti recept alapján, röviden összefoglalva.</p>`;
+  $("#cook-title").textContent = r.title;
+  $("#cook-steps").hidden = !r.steps?.length;
+  $("#cook-done").textContent = "Megfőztük, törölhető";
+  cookSheet.showModal();
+}
+$("#cook-close").addEventListener("click", () => cookSheet.close());
+cookSheet.addEventListener("click", (e) => { if (e.target === cookSheet) cookSheet.close(); });
+$("#cook-steps").addEventListener("click", () => { cookSheet.close(); openSteps(cookOpen); });
+$("#cook-done").addEventListener("click", async () => {
+  if (!cookDelArmed) { cookDelArmed = true; $("#cook-done").textContent = "Biztosan törlöd? Koppints újra"; return; }
+  try { await backend.removeCooking(state.listId, cookOpen.id); cookSheet.close(); toast(`Jó étvágyat! „${cookOpen.title}” lekerült a Főzés fülről.`); }
+  catch (err) { console.error(err); toast("Nem sikerült törölni."); }
+});
+
+/* Lépésről lépésre mód – nagy betű, képernyő ébren tartása, hangvezérlés */
+const stepSheet = $("#step-sheet");
+const step = { r: null, i: 0, voice: false, lock: null };
+const stepKey = (r) => `kk:step:${r.id}`;
+async function keepAwake(on) {
+  try {
+    if (on && "wakeLock" in navigator) { step.lock = await navigator.wakeLock.request("screen"); }
+    else { await step.lock?.release(); step.lock = null; }
+  } catch { /* nem minden böngésző engedi */ }
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && stepSheet.open) keepAwake(true); });
+
+function openSteps(r) {
+  if (!r?.steps?.length) return;
+  step.r = r; step.i = Math.min(LS.get(stepKey(r), 0), r.steps.length - 1);
+  renderStep();
+  stepSheet.showModal();
+  keepAwake(true);
+}
+function renderStep() {
+  const r = step.r, n = r.steps.length, x = r.steps[step.i];
+  $("#step-title").textContent = r.title;
+  $("#step-src").innerHTML = sourceChip(r.sourceSite, r.sourceUrl);
+  $("#step-count").textContent = `${step.i + 1}. lépés / ${n}`;
+  $("#step-bar").style.width = `${((step.i + 1) / n) * 100}%`;
+  $("#step-img").innerHTML = recipeImg(x.image, "step-big-img");
+  $("#step-text").textContent = x.text;
+  $("#step-prev").disabled = step.i === 0;
+  $("#step-next").textContent = step.i === n - 1 ? "Kész!" : "Következő ›";
+  $("#step-voice").classList.toggle("on", step.voice);
+  $("#step-voice").setAttribute("aria-pressed", String(step.voice));
+  LS.set(stepKey(r), step.i);
+}
+function goStep(d) {
+  const n = step.r.steps.length;
+  if (d > 0 && step.i === n - 1) { closeSteps(); toast("Jó étvágyat!"); return; }
+  step.i = Math.max(0, Math.min(n - 1, step.i + d));
+  renderStep();
+  if (step.voice) speak(`${step.i + 1}. lépés. ${step.r.steps[step.i].text}`);
+}
+function closeSteps() { if (stepSheet.open) stepSheet.close(); }
+stepSheet.addEventListener("close", () => { keepAwake(false); if (step.voice) { step.voice = false; stopListening(); } });
+$("#step-prev").addEventListener("click", () => goStep(-1));
+$("#step-next").addEventListener("click", () => goStep(1));
+$("#step-close").addEventListener("click", closeSteps);
+$("#step-voice").addEventListener("click", () => {
+  if (!SR) { toast("A hangvezérléshez Chrome kell."); return; }
+  step.voice = !step.voice;
+  if (step.voice) { stopListening(); startListening({ mode: "steps" }); speak(`${step.i + 1}. lépés. ${step.r.steps[step.i].text}`); }
+  else stopListening();
+  renderStep();
+});
+function onStepSpeech(txt) {
+  const t = norm(txt);
+  if (/(tovább|következő|mehet|kész|megvan|jöhet)/.test(t)) return goStep(1);
+  if (/(vissza|előző)/.test(t)) return goStep(-1);
+  if (/(ismét|újra|mégegyszer|még egyszer|mi volt)/.test(t)) return speak(`${step.i + 1}. lépés. ${step.r.steps[step.i].text}`);
+  if (/(ennyi|vége|bezár|leállít|stop|elég)/.test(t)) { step.voice = false; stopListening(); renderStep(); return; }
+}
 
 /* Meghívás / beállítások lap */
 const listSheet = $("#list-sheet");

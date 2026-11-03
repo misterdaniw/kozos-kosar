@@ -30,6 +30,17 @@ service cloud.firestore {
       );
       allow delete: if false;
 
+      // Főzés fül: a hozzávalókkal feltett receptek (lépések, forrás)
+      match /cooking/{cookId} {
+        allow read, delete: if isMember(listId);
+        allow create, update: if isMember(listId)
+          && request.resource.data.title is string
+          && request.resource.data.title.size() > 0
+          && request.resource.data.title.size() <= 120
+          && (!('steps' in request.resource.data) || request.resource.data.steps.size() <= 30)
+          && (!('ingredients' in request.resource.data) || request.resource.data.ingredients.size() <= 80);
+      }
+
       // Közös kedvenc receptek
       match /favorites/{favId} {
         allow read, delete: if isMember(listId);

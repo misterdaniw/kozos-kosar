@@ -177,22 +177,43 @@ export function parseSpoken(text) {
   return { items: out.map(({ unknown, ...rest }) => rest), questions, confident, unknown: out.filter((i) => i.unknown).map((i) => i.name) };
 }
 
-/* ---------- Válasz egy nyitott kérdésre ("a kaliforniai", "mindegy", "nem kell") ---------- */
+/* ---------- Válasz egy nyitott kérdésre ("a kaliforniait", "a kettes", "mindegy", "nem kell") ---------- */
 export const SKIP = Symbol("skip");
-export function matchAnswer(q, text) {
-  const t = norm(text).replace(/[.,!?]/g, "").replace(/tévé/g, "tv");
-  if (/\b(nem kell|hagyd|felejtsd|mégse|semmi|töröld|kihagy|ne )/.test(t + " ")) return SKIP;
-  if (/(mindegy|bármelyik|bármilyen|akármelyik|az első|amelyik)/.test(t)) return q.options[0];
-  for (const o of q.options) {
-    const on = norm(o);
-    if (t.includes(on)) return o;
-    const stems = on.split(" ").filter((w) => w.length >= 4 && w !== q.about).map((w) => w.slice(0, 5));
-    if (stems.some((s) => t.includes(s))) return o;
-  }
-  // "második", "harmadik"
-  const ord = ["első", "második", "harmadik", "negyedik"].findIndex((w) => t.includes(w));
-  if (ord >= 0 && q.options[ord]) return q.options[ord];
+const ORD = [
+  /\b(első|elsőt|egyes|egyest|1|1es)\b/, /\b(második|másodikat|kettes|kettest|2|2es)\b/, /\b(harmadik|harmadikat|hármas|hármast|3|3as)\b/,
+  /\b(negyedik|negyediket|négyes|négyest|4|4es)\b/, /\b(ötödik|ötödiket|ötös|ötöst|5|5ös)\b/, /\b(hatodik|hatodikat|hatos|hatost|6|6os)\b/,
+  /\b(hetedik|hetediket|hetes|hetest|7)\b/, /\b(nyolcadik|nyolcadikat|nyolcas|nyolcast|8)\b/,
+];
+const STOPWORDS = new Set("a az és meg is azt ezt amit kell kérem legyen inkább szerintem nekem van vagy egy".split(" "));
+// Kimondott válasz → a választott lehetőség (vagy SKIP, vagy null, ha nem egyértelmű)
+export function matchOption(options, text, about = "") {
+  const t = " " + norm(text).replace(/[.,!?]/g, " ").replace(/tévé/g, "tv").replace(/\s+/g, " ") + " ";
+  if (/\b(nem kell|hagyd|felejtsd|mégse|semmi|töröld|kihagy|egyik sem|ne )/.test(t)) return SKIP;
+  if (/(mindegy|bármelyik|bármilyen|akármelyik|amelyik|amit javasolsz)/.test(t)) return options[0];
+  for (const o of options) if (t.includes(" " + norm(o) + " ") || t.includes(norm(o))) return o;
+  // szótő-egyezés: a legtöbb egyező szótövű lehetőség nyer, ha egyértelmű
+  const words = t.trim().split(" ").filter((w) => w.length >= 2 && !STOPWORDS.has(w)).map((w) => w.slice(0, 5));
+  const ab = norm(about).slice(0, 5);
+  const hit = (w, x) => (w.length < 3 || x.length < 3 ? w === x : x.startsWith(w.slice(0, 4)) || w.startsWith(x.slice(0, 4)));
+  const scored = options.map((o) => {
+    const ow = norm(o).split(/[\s-]+/).filter((w) => w.length >= 2).map((w) => w.slice(0, 5)).filter((w) => w !== ab);
+    return [o, ow.filter((w) => words.some((x) => hit(w, x))).length];
+  }).sort((a, b) => b[1] - a[1]);
+  if (scored[0]?.[1] > 0 && (!scored[1] || scored[1][1] < scored[0][1])) return scored[0][0];
+  const ord = ORD.findIndex((re) => re.test(t));
+  if (ord >= 0 && options[ord]) return options[ord];
   return null;
+}
+export function matchAnswer(q, text) { return matchOption(q.options, text, q.about); }
+
+/* ---------- „Ennyi” – a diktálás vége ---------- */
+// Visszaadja a mondat érdemi részét és azt, hogy a felhasználó befejezte-e: "tej meg vaj ennyi" → {rest:"tej meg vaj", stop:true}
+const STOP_RE = /(?:^|\s)(?:és\s+|meg\s+)?(?:ennyi(?:\s+volt)?|ez\s+minden|ez\s+az\s+összes|ez\s+lenne\s+az\s+összes|más\s+nem\s+kell|semmi\s+más|kész\s+vagyok|befejeztem|vége|kész|stop|állj)(?:\s+(?:köszi|köszönöm|kösz|is))?\s*$/;
+export function splitStop(text) {
+  const t = norm(text).replace(/[.,!?]+$/g, "").trim();
+  const m = t.match(STOP_RE);
+  if (!m) return { rest: text.trim(), stop: false };
+  return { rest: t.slice(0, m.index).replace(/[\s,]+$/, "").trim(), stop: true };
 }
 
 /* ---------- Létszám és mennyiség átszámítása ---------- */
