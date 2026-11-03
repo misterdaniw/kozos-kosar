@@ -25,8 +25,13 @@ echo "== Firestore adatbázis"
 if $FB firestore:databases:get "(default)" >/dev/null 2>&1; then
   echo "Már létezik."
 else
-  $FB firestore:databases:create "(default)" --location=eur3 \
-    || { echo "::error::Nem sikerült létrehozni a Firestore adatbázist."; exit 1; }
+  # Az imént bekapcsolt API-k pár percig még „nem engedélyezettnek” látszhatnak: türelmesen újrapróbáljuk
+  ok=""
+  for i in 1 2 3 4 5 6 7 8; do
+    if $FB firestore:databases:create "(default)" --location=eur3; then ok=1; break; fi
+    echo "Még nem sikerült, várok 30 mp-et ($i/8)…"; sleep 30
+  done
+  [ -n "$ok" ] || { echo "::error::Nem sikerült létrehozni a Firestore adatbázist."; exit 1; }
   sleep 20
 fi
 
