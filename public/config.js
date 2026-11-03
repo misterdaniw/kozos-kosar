@@ -19,9 +19,9 @@ export default {
   },
 
   // Gemini modell a Firebase AI Logic-on keresztül (Gemini Developer API, ingyenes Spark csomaggal is megy)
-  model: "gemini-3.8-flash",
+  model: "gemini-3.5-flash-lite",
   // Ha a fő modell túlterhelt, ezekkel próbálkozik sorban (mind ingyenes keretben használható)
-  fallbackModels: ["gemini-3.5-flash-lite"],
+  fallbackModels: ["gemini-3.8-flash"],
   // A bevásárlólista értelmezéséhez használt gyors modell
   fastModel: "gemini-3.5-flash-lite",
 
