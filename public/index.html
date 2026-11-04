@@ -58,6 +58,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+img { max-width: 100%; height: auto; }
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0; background: var(--bg); color: var(--ink);
@@ -457,7 +458,7 @@ dialog.sheet.tall .sheet-body { height: 100%; grid-template-rows: auto auto auto
   flex: 1; min-width: 0; text-align: left; border: 0; background: transparent; padding: 12px 6px 12px 12px;
   display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 12px; align-items: center;
 }
-.rimg { width: 76px; height: 76px; border-radius: 16px; object-fit: cover; background: var(--bg); display: block; }
+.rimg { width: 76px; height: 76px; max-width: none; border-radius: 18px; object-fit: cover; background: var(--bg); display: block; }
 .rtext { display: grid; gap: 3px; justify-items: start; min-width: 0; }
 .rmain strong { font: 600 17px/1.25 var(--f-display); overflow-wrap: anywhere; }
 .rdesc { font-size: 14px; color: var(--muted); font-weight: 600; }
@@ -492,7 +493,7 @@ dialog.sheet.tall .sheet-body { height: 100%; grid-template-rows: auto auto auto
 .cook-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
 .cook-card { background: var(--surface); border-radius: var(--r); box-shadow: var(--shadow); overflow: hidden; }
 .cook-open { width: 100%; border: 0; background: transparent; text-align: left; display: flex; gap: 12px; padding: 12px; align-items: center; }
-.cook-thumb { width: 84px; height: 84px; border-radius: 16px; object-fit: cover; flex: none; background: var(--bg); }
+.cook-thumb { width: 84px; height: 84px; max-width: none; border-radius: 18px; object-fit: cover; flex: none; background: var(--bg); }
 .cook-thumb.ph { display: grid; place-items: center; background: hsl(30 85% var(--tile-l)); color: hsl(30 65% var(--icon-l)); }
 .cook-thumb.ph svg { width: 36px; height: 36px; }
 .cook-body { flex: 1; min-width: 0; display: grid; gap: 4px; }
@@ -512,8 +513,8 @@ a.rsite { text-decoration: none; }
 
 /* Recipe detail */
 .cook-sheet-body { grid-template-rows: auto auto 1fr auto !important; }
-#cook-body { overflow-y: auto; min-height: 0; display: grid; gap: 12px; align-content: start; }
-.cook-hero { display: block; width: 100%; height: 200px; object-fit: cover; border-radius: 18px; }
+#cook-body { overflow-y: auto; overflow-x: hidden; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-content: start; }
+.cook-hero { display: block; width: 100%; max-width: 100%; height: 200px; object-fit: cover; border-radius: 20px; }
 .cook-src { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; color: var(--muted); font-weight: 700; font-size: 14px; }
 .cook-src span svg { width: 15px; height: 15px; vertical-align: -2px; margin-right: 3px; }
 #cook-body h4 { margin: 4px 0 0; font: 600 18px/1.2 var(--f-display); }
@@ -535,7 +536,7 @@ dialog.step-mode {
 }
 dialog.step-mode::backdrop { background: var(--bg); }
 .step-wrap {
-  height: 100%; display: grid; grid-template-rows: auto auto 1fr auto; gap: 14px; max-width: 720px; margin: 0 auto;
+  height: 100%; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto 1fr auto; gap: 14px; max-width: 720px; margin: 0 auto;
   padding-top: calc(14px + env(safe-area-inset-top, 0px)); padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
 }
@@ -547,8 +548,9 @@ dialog.step-mode::backdrop { background: var(--bg); }
 .step-progress { display: grid; gap: 6px; font: 600 15px/1 var(--f-display); color: var(--muted); }
 .step-progress .bar { display: block; height: 8px; background: var(--surface); border-radius: 99px; overflow: hidden; }
 .step-progress i { display: block; height: 8px; background: var(--leaf); border-radius: 99px; transition: width .25s; }
-.step-main { overflow-y: auto; min-height: 0; display: grid; gap: 14px; align-content: start; }
-.step-big-img { display: block; width: 100%; height: 26dvh; object-fit: cover; border-radius: 20px; }
+.step-main { overflow-y: auto; overflow-x: hidden; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-content: start; }
+#step-img { min-width: 0; }
+.step-big-img { display: block; width: 100%; max-width: 100%; height: 26dvh; object-fit: cover; border-radius: 20px; }
 #step-text { margin: 0; font: 600 clamp(22px, 6vw, 30px)/1.4 var(--f-display); text-wrap: pretty; }
 .step-nav { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; }
 .step-nav .btn { padding: 18px; font-size: 19px; }
