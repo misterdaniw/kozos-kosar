@@ -103,20 +103,6 @@ echo "== Gemini (AI Logic) állapota"
 code=$(curl -sS -o /tmp/gl.json -w "%{http_code}" "${H[@]}" "https://serviceusage.googleapis.com/v1/projects/$P/services/firebasevertexai.googleapis.com")
 echo "AI Logic API: $(jq -r '.state // "?"' /tmp/gl.json)"
 
-echo "== Gemini próbahívás (App Check token nélkül – a válasz mutatja, mi hiányzik még)"
-APIKEY="$(node -e 'import("./public/config.js").then(m=>console.log(m.default.firebase.apiKey))' 2>/dev/null || true)"
-MODELS="$(node -e 'import("./public/config.js").then(m=>console.log([m.default.model||"gemini-3.8-flash",...(m.default.fallbackModels||[])].join(" ")))' 2>/dev/null || echo gemini-3.8-flash)"
-for MODEL in $MODELS; do
-  code=$(curl -sS -o /tmp/gem.json -w "%{http_code}" -X POST \
-    -H "Content-Type: application/json" -H "x-goog-api-key: $APIKEY" -H "X-Firebase-AppId: $APPID" \
-    "https://firebasevertexai.googleapis.com/v1beta/projects/$P/models/$MODEL:generateContent" \
-    -d '{"contents":[{"role":"user","parts":[{"text":"Mondj egy magyar csirkés ételt, csak a nevét."}]}]}')
-  echo "GEMINI_TEST $MODEL http=$code $(jq -c '{error: .error.message, status: .error.status, text: (.candidates[0].content.parts[0].text // null)}' /tmp/gem.json 2>/dev/null | cut -c1-300)"
-done
-
-
-
-
 echo "== Fizetési csomag (Blaze) ellenőrzése"
 gcloud services enable cloudbilling.googleapis.com --project "$P" >/dev/null 2>&1 || true
 TOKEN="$(gcloud auth print-access-token)"
@@ -154,41 +140,10 @@ if [ "$BILLING" = "true" ]; then
   else
     echo "VAIS engine már létezik"
   fi
-  # Próbakeresés közvetlenül (a szerverfüggvénytől függetlenül), hogy lássuk, adnak-e találatot a két oldalról
-  code=$(curl -sS -o /tmp/sq.json -w "%{http_code}" -X POST "${H[@]}" "$DE/engines/recipe-search/servingConfigs/default_search:search" \
-    -d '{"query":"csirke recept","pageSize":10,"languageCode":"hu"}')
-  echo "VAIS search http=$code n=$(jq '.results | length' /tmp/sq.json 2>/dev/null) $(jq -c '.error.message // ([.results[]?.document.derivedStructData | (.title + " | " + .link + " | img=" + ((.pagemap.cse_image[0].src // .pagemap.metatags[0]["og:image"] // "") | .[0:60]))] | .[0:5])' /tmp/sq.json 2>/dev/null | cut -c1-1200)"
 fi
 
 if [ "$BILLING" = "true" ]; then
   echo "== Gemini a Google Cloud (Agent Platform) szolgáltatáson – utólagos számlázás, nem kell előre fizetett kredit"
   gcloud services enable aiplatform.googleapis.com firebasevertexai.googleapis.com --project "$P" || warn "Az aiplatform API bekapcsolása nem sikerült."
-  echo "AGENT_TEST SDK export: $(curl -sS https://www.gstatic.com/firebasejs/13.1.0/firebase-ai.js | grep -o 'AgentPlatformBackend\|VertexAIBackend' | sort -u | tr '\n' ' ')"
-  for M in gemini-3.5-flash-lite gemini-3.8-flash; do
-    code=$(curl -sS -o /tmp/ag.json -w "%{http_code}" -X POST -H "Content-Type: application/json" -H "x-goog-api-key: $APIKEY" -H "X-Firebase-AppId: $APPID" \
-      "https://firebasevertexai.googleapis.com/v1beta/projects/$P/locations/global/publishers/google/models/$M:generateContent" \
-      -d '{"contents":[{"role":"user","parts":[{"text":"Mondj egy magyar csirkés ételt, csak a nevét."}]}]}')
-    echo "AGENT_TEST $M http=$code $(jq -c '{error: .error.message, text: (.candidates[0].content.parts[0].text // null)}' /tmp/ag.json 2>/dev/null | cut -c1-300)"
-  done
-
-  echo "== Szerverfüggvény próbahívás egy névtelen próba-felhasználóval"
-  IDT="$(curl -sS -X POST -H "Content-Type: application/json" -H "X-Firebase-AppId: $APPID" "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$APIKEY" -d '{"returnSecureToken":true}' | jq -r '.idToken // empty')"
-  if [ -n "$IDT" ]; then
-    code=$(curl -sS -o /tmp/fn.json -w "%{http_code}" -X POST -H "Content-Type: application/json" -H "Authorization: Bearer $IDT" \
-      "https://europe-west1-$P.cloudfunctions.net/searchRecipes" -d '{"data":{"query":"csirke","offset":0}}')
-    echo "FN_TEST http=$code $(jq -c '{error: .error, n: (.result.recipes | length), first: ([.result.recipes[]? | .title + " | " + .site + " | img=" + (.image|.[0:50])] | .[0:4])}' /tmp/fn.json 2>/dev/null | cut -c1-900)"
-  else echo "FN_TEST nem sikerült próba-felhasználót létrehozni"; fi
-  # A függvény maga ellenőrzi a belépést (onCall), ezért a Cloud Run előtti IAM-kapu nyitva lehet
-  SA_EMAIL="$(jq -r .client_email "$KEY")"
-  echo "FN_TEST roles: $(gcloud projects get-iam-policy "$P" --flatten='bindings[].members' --filter="bindings.members:serviceAccount:$SA_EMAIL" --format='value(bindings.role)' 2>&1 | tr '\n' ' ' | cut -c1-300)"
-  echo "FN_TEST bind: $(gcloud run services add-iam-policy-binding searchrecipes --region europe-west1 --project "$P" --member=allUsers --role=roles/run.invoker --quiet 2>&1 | tail -1 | cut -c1-250)"
-  echo "FN_TEST iam: $(gcloud run services get-iam-policy searchrecipes --region europe-west1 --project "$P" --format=json 2>&1 | jq -c '[.bindings[]? | {role, members}]' 2>/dev/null | cut -c1-400)"
-  code=$(curl -sS -o /tmp/fn.json -w "%{http_code}" -X POST -H "Content-Type: application/json" -H "Authorization: Bearer $IDT" \
-    "https://europe-west1-$P.cloudfunctions.net/searchRecipes" -d '{"data":{"query":"csirke","offset":0}}')
-  echo "FN_TEST retry http=$code $(jq -c '{error: .error, n: (.result.recipes | length), first: ([.result.recipes[]? | .title + " | " + .site + " | img=" + (.image|.[0:50])] | .[0:5])}' /tmp/fn.json 2>/dev/null | cut -c1-900)"
-  echo "FN_TEST invokerIamDisabled: $(gcloud run services describe searchrecipes --region europe-west1 --project "$P" --format='value(metadata.annotations."run.googleapis.com/invoker-iam-disabled")' 2>&1 | head -1)"
-  echo "== Szerverfüggvény napló (utolsó hibák)"
-  gcloud logging read "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"searchrecipes\" AND severity>=WARNING" \
-    --project "$P" --limit 8 --freshness 2h --format 'value(timestamp,severity,textPayload,jsonPayload.message)' 2>&1 | cut -c1-400 | sed 's/^/FN_LOG /'
 fi
 true  # a diagnosztika hibája ne állítsa le a feltöltést
