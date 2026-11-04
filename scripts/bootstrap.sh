@@ -163,6 +163,7 @@ fi
 if [ "$BILLING" = "true" ]; then
   echo "== Gemini a Google Cloud (Agent Platform) szolgáltatáson – utólagos számlázás, nem kell előre fizetett kredit"
   gcloud services enable aiplatform.googleapis.com firebasevertexai.googleapis.com --project "$P" || warn "Az aiplatform API bekapcsolása nem sikerült."
+  echo "AGENT_TEST SDK export: $(curl -sS https://www.gstatic.com/firebasejs/13.1.0/firebase-ai.js | grep -o 'AgentPlatformBackend\|VertexAIBackend' | sort -u | tr '\n' ' ')"
   for M in gemini-3.5-flash-lite gemini-3.8-flash; do
     code=$(curl -sS -o /tmp/ag.json -w "%{http_code}" -X POST -H "Content-Type: application/json" -H "x-goog-api-key: $APIKEY" -H "X-Firebase-AppId: $APPID" \
       "https://firebasevertexai.googleapis.com/v1beta/projects/$P/locations/global/publishers/google/models/$M:generateContent" \

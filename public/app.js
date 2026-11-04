@@ -298,8 +298,12 @@ async function createFirebaseBackend(cfg) {
   let model = null, interpreter = null, urlModel = null, searchModel = null, ideasModel = null, listModel = null;
   async function getModel() {
     if (model) return model;
-    const { getAI, getGenerativeModel, GoogleAIBackend, Schema } = await import(`${FIREBASE_CDN}/firebase-ai.js`);
-    const ai = getAI(app, { backend: new GoogleAIBackend() });
+    const aiMod = await import(`${FIREBASE_CDN}/firebase-ai.js`);
+    const { getAI, getGenerativeModel, GoogleAIBackend, Schema } = aiMod;
+    // Blaze csomaggal a Gemini a Google Cloud (Agent Platform) szolgáltatáson fut, utólagos számlázással;
+    // a Gemini Developer API fizetős módban előre fizetett kreditet kérne
+    const AgentBackend = aiMod.AgentPlatformBackend || aiMod.VertexAIBackend;
+    const ai = getAI(app, { backend: cfg.aiBackend === "developer" || !AgentBackend ? new GoogleAIBackend() : new AgentBackend(cfg.aiLocation || "global") });
     // Túlterhelés (500/503/429) esetén újrapróbálunk, majd a következő ingyenes modellre váltunk
     const MODELS = [...new Set([cfg.model || "gemini-3.8-flash", ...(cfg.fallbackModels || ["gemini-3.5-flash-lite"])])];
     // A lista értelmezéséhez a gyors modell megy elöl (pár tétel felbontásához bőven elég, és gyorsabban válaszol)

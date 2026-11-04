@@ -18,6 +18,10 @@ export default {
     siteKey: "",
   },
 
+  // Gemini szolgáltatás: "agentPlatform" (Google Cloud, utólagos számlázás – Blaze csomaghoz) vagy "developer" (ingyenes keret, Spark csomag)
+  aiBackend: "agentPlatform",
+  aiLocation: "global",
+
   // Gemini modell a Firebase AI Logic-on keresztül (Gemini Developer API, ingyenes Spark csomaggal is megy)
   model: "gemini-3.5-flash-lite",
   // Ha a fő modell túlterhelt, ezekkel próbálkozik sorban (mind ingyenes keretben használható)
