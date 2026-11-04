@@ -212,10 +212,11 @@ function createDemoBackend() {
     async removeCooking(id, cid) { await mutate(id, (d) => { d.cooking = (d.cooking || []).filter((c) => c.id !== cid); }); },
     async addFavorite(id, fav) { const fid = rid(); await mutate(id, (d) => { (d.favorites ||= []).push({ id: fid, createdAt: Date.now(), ...fav }); }); return fid; },
     async removeFavorite(id, favId) { await mutate(id, (d) => { d.favorites = (d.favorites || []).filter((f) => f.id !== favId); }); },
-    async searchRecipes(query) {
+    async searchRecipes(query, { exclude = [] } = {}) {
       await new Promise((r) => setTimeout(r, 500));
       const words = norm(query).split(/\s+/).filter((w) => w.length > 2).map((w) => w.slice(0, 5));
-      const hits = DEMO_IDEAS.filter(([t, k]) => words.some((w) => norm(t + " " + k).includes(w)));
+      const seen = new Set(exclude.map(norm));
+      const hits = DEMO_IDEAS.filter(([t, k]) => words.some((w) => norm(t + " " + k).includes(w)) && !seen.has(norm(t))).slice(0, 3);
       return {
         recipes: hits.map(([title, , description, minutes]) => ({ title, description, minutes, url: "", site: "" })),
         note: hits.length ? "Demó ötletek. A beállított appban a Street Kitchen és a Mindmegette receptjeit listázza."
@@ -417,10 +418,12 @@ async function createFirebaseBackend(cfg) {
       return ref.id;
     },
     async removeFavorite(id, favId) { await fs.deleteDoc(fs.doc(favsRef(id), favId)); },
-    async searchRecipes(query) {
+    async searchRecipes(query, { exclude = [] } = {}) {
       await getModel();
+      // „További receptek”: ugyanarra a keresésre újabbak, a már látottak nélkül
+      const more = exclude.length ? `\nMár megmutattuk ezeket, ezeket NE add vissza újra, hanem másokat: ${exclude.slice(0, 60).join("; ")}` : "";
       if (listModel) {
-        const res = await listModel.generateContent(`Keresés: ${query}`);
+        const res = await listModel.generateContent(`Keresés: ${query}${more}`);
         const d = parseJsonLoose(res.response.text());
         const meta = res.response.candidates?.[0]?.groundingMetadata;
         const recipes = (d.recipes || []).map((r) => {
@@ -430,7 +433,7 @@ async function createFirebaseBackend(cfg) {
         return { recipes, note: d.note || "", searchEntryPoint: meta?.searchEntryPoint?.renderedContent || "",
           searchSources: (meta?.groundingChunks || []).map((c) => c.web).filter(Boolean).slice(0, 5) };
       }
-      const res = await ideasModel.generateContent(`Keresés: ${query}`);
+      const res = await ideasModel.generateContent(`Keresés: ${query}${more}`);
       const d = JSON.parse(res.response.text());
       return { recipes: (d.recipes || []).map((r) => ({ ...r, url: "", site: "" })), note: d.note || "", ideas: true };
     },
@@ -1138,7 +1141,7 @@ async function searchRecipes(query, { spoken = false } = {}) {
   const S = state.search;
   query = String(query).trim(); if (!query) return;
   if (/https?:\/\//.test(query)) { rSheet.close(); return runSuggest(query); }
-  Object.assign(S, { query, results: [], loading: true, tab: "search", meta: null, error: "" });
+  Object.assign(S, { query, results: [], loading: true, tab: "search", meta: null, error: "", moreLoading: false, noMore: false, moreError: "" });
   renderRecipes();
   try {
     const r = await backend.searchRecipes(query);
@@ -1158,6 +1161,33 @@ async function searchRecipes(query, { spoken = false } = {}) {
     renderRecipes();
   }
 }
+// További receptek ugyanarra a keresésre (a már látottak kizárásával), a lista végére fűzve
+async function moreRecipes() {
+  const S = state.search;
+  if (!S.query || S.moreLoading || S.loading) return;
+  const query = S.query;
+  Object.assign(S, { moreLoading: true, moreError: "" });
+  renderRecipes();
+  try {
+    const r = await backend.searchRecipes(query, { exclude: S.results.map((x) => x.title) });
+    if (S.query !== query) return;
+    const seen = new Set(S.results.map((x) => favKey(x)));
+    const fresh = (r.recipes || []).filter((x) => x.title && !seen.has(favKey(x)));
+    const firstNew = S.results.length;
+    S.results = S.results.concat(fresh);
+    Object.assign(S, { moreLoading: false, noMore: fresh.length === 0 });
+    if (r.searchEntryPoint) S.meta = { ...(S.meta || {}), searchEntryPoint: r.searchEntryPoint };
+    renderRecipes();
+    // görgessünk az első új találathoz
+    $("#rs-body").querySelectorAll(".rcard")[firstNew]?.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (err) {
+    console.error(err);
+    if (S.query !== query) return;
+    Object.assign(S, { moreLoading: false, moreError: "Most nem sikerült több receptet hozni. Próbáld újra." + errDetail(err) });
+    renderRecipes();
+  }
+}
+
 $("#rs-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const q = $("#rs-q").value.trim();
@@ -1174,6 +1204,7 @@ function onSearchSpeech(txt) {
   const t = norm(txt).replace(/[.,!?]/g, "");
   $("#rs-q").value = txt;
   if (/kedvenc/.test(t)) { state.search.tab = "favs"; renderRecipes(); return; }
+  if (state.search.results.length && /^(még|továbbiak|további|többet|mutass (még|többet)|kérek (még|többet)|más(ikat|okat)?|újabbakat|mást)( receptet| recepteket)?( is)?$/.test(t)) { $("#rs-q").value = state.search.query; return moreRecipes(); }
   const list = state.search.tab === "favs" ? state.favorites : state.search.results;
   const ord = ["első", "második", "harmadik", "negyedik", "ötödik", "hatodik", "hetedik", "nyolcadik"].findIndex((w) => t.includes(w));
   if (list.length && ord >= 0 && list[ord]) return pickRecipe(list[ord], { spoken: true });
@@ -1240,6 +1271,13 @@ function renderRecipes() {
     if (m.note) html += `<p class="note">${esc(m.note)}</p>`;
     if (m.ideas && S.results.length) html += `<p class="rhint">Ötletek a Gemini-től. Koppints egyre, és összeállítom a hozzávalókat, vagy a nyíllal keresd meg a Street Kitchenen és a Mindmegettén.</p>`;
     if (S.results.length) html += `<ul class="rlist">${S.results.map((r, i) => recipeCard(r, i, "search")).join("")}</ul>`;
+    if (S.results.length) {
+      html += S.moreLoading
+        ? `<div class="loading more-loading"><div class="bounce" aria-hidden="true"><i></i><i></i><i></i></div><span>Keresek még recepteket…</span></div>`
+        : S.noMore ? `<p class="rhint center">Erre a keresésre nem találtam több receptet.</p>`
+        : `<button type="button" class="more-btn" id="rs-more">További receptek</button>`;
+      if (S.moreError) html += `<p class="note">${esc(S.moreError)}</p>`;
+    }
     else if (!S.error && !m.note) html += `<p class="note">Nem találtam receptet erre: „${esc(S.query)}”. Próbálj egy másik szót.</p>`;
     // Google keresési javaslatok: a Google előírása szerint meg kell jeleníteni
     if (m.searchEntryPoint) {
@@ -1255,6 +1293,7 @@ function renderRecipes() {
 $("#rs-tab-search").addEventListener("click", () => { state.search.tab = "search"; renderRecipes(); });
 $("#rs-tab-favs").addEventListener("click", () => { state.search.tab = "favs"; renderRecipes(); });
 $("#rs-body").addEventListener("click", (e) => {
+  if (e.target.closest("#rs-more")) return moreRecipes();
   const chip = e.target.closest("[data-q]");
   if (chip) { $("#rs-q").value = chip.dataset.q; if (voice.wantOn) stopListening(); return searchRecipes(chip.dataset.q); }
   const list = state.search.tab === "favs" ? state.favorites : state.search.results;

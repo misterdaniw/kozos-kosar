@@ -2,7 +2,7 @@
 <html lang="hu">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <title>Közös Kosár</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="description" content="Közös családi bevásárlólista, ami valós időben szinkronizál, és egy étel nevéből összeállítja a hozzávalókat.">
@@ -397,7 +397,14 @@ dialog.sheet.tall { height: 88dvh; }
 dialog.sheet.tall .sheet-body { height: 100%; grid-template-rows: auto auto auto 1fr auto; grid-template-columns: minmax(0, 1fr); overflow: hidden; }
 .sheet-body { grid-template-columns: minmax(0, 1fr); }
 /* Receptkereső: a beviteli sáv lent, pontosan a főoldali sáv helyén és kinézetével */
-#recipes-sheet { background: var(--bg); }
+/* A receptkereső teljes oldal, mint a kezdőlap: fent a találatok, lent a beviteli sáv */
+#recipes-sheet {
+  background: var(--bg); width: 100%; max-width: none; height: 100%; max-height: none; margin: 0; border-radius: 0;
+}
+#recipes-sheet .sheet-body { max-width: 640px; margin: 0 auto; padding-top: calc(14px + env(safe-area-inset-top, 0px)); grid-template-rows: auto auto 1fr auto; }
+#recipes-sheet .sheet-body::before { display: none; }
+#recipes-sheet[open] { animation: none; }
+#recipes-sheet h3 { font-size: 30px; }
 #recipes-sheet .sheet-body {
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
   padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
@@ -407,6 +414,13 @@ dialog.sheet.tall .sheet-body { height: 100%; grid-template-rows: auto auto auto
 #recipes-sheet .wrapchips .chip { background: var(--surface); box-shadow: var(--shadow); }
 #recipes-sheet .close-btn { background: var(--surface); }
 .rs-bar { margin-top: 4px; }
+.more-btn {
+  justify-self: center; border: 2.5px solid var(--sun); background: var(--surface); color: var(--ink); border-radius: 99px;
+  padding: 12px 22px; font: 600 16px/1 var(--f-display); box-shadow: var(--shadow);
+}
+.more-btn:active { background: var(--sun); color: var(--sun-ink); }
+.more-loading { justify-content: center; }
+.rhint.center { text-align: center; }
 .rs-bar input::-webkit-search-cancel-button { display: none; }
 .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: var(--bg); padding: 4px; border-radius: 16px; }
 .tabs button {
