@@ -159,3 +159,16 @@ if [ "$BILLING" = "true" ]; then
     -d '{"query":"csirke recept","pageSize":10,"languageCode":"hu"}')
   echo "VAIS search http=$code n=$(jq '.results | length' /tmp/sq.json 2>/dev/null) $(jq -c '.error.message // ([.results[]?.document.derivedStructData | (.title + " | " + .link + " | img=" + ((.pagemap.cse_image[0].src // .pagemap.metatags[0]["og:image"] // "") | .[0:60]))] | .[0:5])' /tmp/sq.json 2>/dev/null | cut -c1-1200)"
 fi
+
+if [ "$BILLING" = "true" ]; then
+  echo "== Szerverfüggvény próbahívás egy névtelen próba-felhasználóval"
+  IDT="$(curl -sS -X POST -H "Content-Type: application/json" -H "X-Firebase-AppId: $APPID" "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$APIKEY" -d '{"returnSecureToken":true}' | jq -r '.idToken // empty')"
+  if [ -n "$IDT" ]; then
+    code=$(curl -sS -o /tmp/fn.json -w "%{http_code}" -X POST -H "Content-Type: application/json" -H "Authorization: Bearer $IDT" \
+      "https://europe-west1-$P.cloudfunctions.net/searchRecipes" -d '{"data":{"query":"csirke","offset":0}}')
+    echo "FN_TEST http=$code $(jq -c '{error: .error, n: (.result.recipes | length), first: ([.result.recipes[]? | .title + " | " + .site + " | img=" + (.image|.[0:50])] | .[0:4])}' /tmp/fn.json 2>/dev/null | cut -c1-900)"
+  else echo "FN_TEST nem sikerült próba-felhasználót létrehozni"; fi
+  echo "== Szerverfüggvény napló (utolsó hibák)"
+  gcloud logging read "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"searchrecipes\" AND severity>=WARNING" \
+    --project "$P" --limit 8 --freshness 2h --format 'value(timestamp,severity,textPayload,jsonPayload.message)' 2>&1 | cut -c1-400 | sed 's/^/FN_LOG /'
+fi
