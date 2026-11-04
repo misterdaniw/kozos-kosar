@@ -398,22 +398,12 @@ dialog.sheet.tall { height: 88dvh; }
 dialog.sheet.tall .sheet-body { height: 100%; grid-template-rows: auto auto auto 1fr auto; grid-template-columns: minmax(0, 1fr); overflow: hidden; }
 .sheet-body { grid-template-columns: minmax(0, 1fr); }
 /* Receptkereső: a beviteli sáv lent, pontosan a főoldali sáv helyén és kinézetével */
-/* A receptkereső teljes oldal, mint a kezdőlap: fent a találatok, lent a beviteli sáv */
-#recipes-sheet {
-  background: var(--bg); width: 100%; max-width: none; height: 100%; max-height: none; margin: 0; border-radius: 0;
-}
-#recipes-sheet .sheet-body { max-width: 640px; margin: 0 auto; padding-top: calc(14px + env(safe-area-inset-top, 0px)); grid-template-rows: auto auto auto 1fr auto; }
-#recipes-sheet .sheet-body::before { display: none; }
-#recipes-sheet[open] { animation: none; }
-#recipes-sheet h3 { font-size: 30px; }
-#recipes-sheet .sheet-body {
-  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
-  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-}
-#recipes-sheet .tabs { background: var(--surface); }
-#recipes-sheet .rcard { background: var(--surface); box-shadow: var(--shadow); }
-#recipes-sheet .wrapchips .chip { background: var(--surface); box-shadow: var(--shadow); }
-#recipes-sheet .close-btn { background: var(--surface); }
+/* Receptek fül */
+#recipes { margin-top: 12px; display: grid; gap: 12px; }
+#recipes .tabs { background: var(--surface); box-shadow: var(--shadow); }
+#recipes .rcard { background: var(--surface); box-shadow: var(--shadow); }
+#recipes .wrapchips .chip { background: var(--surface); box-shadow: var(--shadow); }
+#rs-body { overflow: visible !important; }
 .rs-bar { margin-top: 4px; }
 /* Glutén nélkül szűrő */
 .rs-filters { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -482,7 +472,7 @@ dialog.sheet.tall .sheet-body { height: 100%; grid-template-rows: auto auto auto
 .rempty strong { color: var(--ink); font: 700 20px/1.2 var(--f-display); }
 
 /* Main tabs: shopping / cooking */
-.main-tabs { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: var(--surface); padding: 4px; border-radius: 18px; margin-bottom: 10px; box-shadow: var(--shadow); }
+.main-tabs { flex: 1; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; background: var(--surface); padding: 4px; border-radius: 18px; margin-bottom: 10px; box-shadow: var(--shadow); }
 .main-tabs button {
   border: 0; border-radius: 14px; padding: 10px; background: transparent; color: var(--muted);
   font: 600 15.5px/1 var(--f-display); display: flex; justify-content: center; align-items: center; gap: 7px;
@@ -577,6 +567,23 @@ dialog.step-mode::backdrop { background: var(--bg); }
 @keyframes micBeat { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
 @keyframes micRing { 0% { transform: scale(1); opacity: .95; } 100% { transform: scale(1.9); opacity: 0; } }
 
+/* Beviteli sáv: felirat a fül szerint, törlés és külön mikrofon gomb */
+.bar-label { margin: 0 0 6px 6px; font: 600 13.5px/1 var(--f-display); color: var(--muted); }
+.bar input { padding-left: 12px; }
+.clear-btn {
+  width: 34px; height: 34px; border-radius: 50%; border: 0; flex: none; display: grid; place-items: center;
+  background: var(--line); color: var(--ink);
+}
+.clear-btn svg { width: 16px; height: 16px; }
+.mic-btn {
+  width: 44px; height: 44px; border-radius: 50%; border: 0; flex: none; display: grid; place-items: center;
+  background: var(--bg); color: var(--ink);
+}
+.mic-btn svg { width: 22px; height: 22px; }
+.main-tabs button { padding: 10px 6px; font-size: 15px; gap: 5px; }
+.main-tabs svg { width: 17px; height: 17px; }
+.row > #ai-view { flex-basis: 100%; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
@@ -628,7 +635,8 @@ dialog.step-mode::backdrop { background: var(--bg); }
     </div>
     <div class="wrap">
       <div class="main-tabs" role="tablist" aria-label="Nézet">
-        <button type="button" role="tab" id="tab-shop" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9.5h18l-2 10a2 2 0 0 1-2 1.6H7a2 2 0 0 1-2-1.6Z"/><path d="M8 9.5l3-6M16 9.5l-3-6"/></svg><span>Bevásárlás</span></button>
+        <button type="button" role="tab" id="tab-shop" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9.5h18l-2 10a2 2 0 0 1-2 1.6H7a2 2 0 0 1-2-1.6Z"/><path d="M8 9.5l3-6M16 9.5l-3-6"/></svg><span>Lista</span></button>
+        <button type="button" role="tab" id="tab-recipes" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><span>Receptek</span></button>
         <button type="button" role="tab" id="tab-cook" aria-selected="false"><span>Főzés</span></button>
       </div>
     </div>
@@ -637,6 +645,20 @@ dialog.step-mode::backdrop { background: var(--bg); }
     <p id="mode-banner" class="banner" hidden></p>
     <div id="groups"></div>
     <div id="cooking" hidden></div>
+    <section id="recipes" hidden aria-label="Receptek">
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" id="rs-tab-search" aria-selected="true">Keresés</button>
+      <button type="button" role="tab" id="rs-tab-favs" aria-selected="false">Kedvencek</button>
+    </div>
+    <div class="rs-filters">
+      <button type="button" class="gf-toggle" id="rs-gf" aria-pressed="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21V9"/><path d="M12 13c-2.5 0-4-1.5-4-4 2.5 0 4 1.5 4 4Zm0 0c2.5 0 4-1.5 4-4-2.5 0-4 1.5-4 4Zm0-4c-2 0-3.2-1.2-3.2-3.2C10.8 5.8 12 7 12 9Zm0 0c2 0 3.2-1.2 3.2-3.2C13.2 5.8 12 7 12 9Z"/><path d="M4 4l16 16"/></svg>
+        <span>Glutén nélkül</span><b class="gf-state" aria-hidden="true"></b>
+      </button>
+    </div>
+    <div id="rs-body" aria-live="polite"></div>
+    <div id="rs-gsearch" hidden></div>
+    </section>
   </main>
   <div class="composer">
     <div class="wrap">
@@ -646,12 +668,11 @@ dialog.step-mode::backdrop { background: var(--bg); }
         <div class="listen-body"><strong id="listen-status">Hallgatlak, mondd sorban!</strong><p id="listen-text"></p></div>
         <button type="button" id="listen-stop">Kész</button>
       </div>
+      <p class="bar-label" id="bar-label">Tétel hozzáadása a listához</p>
       <form class="bar" id="bar" autocomplete="off">
-        <button type="button" class="mode-btn" id="mode-btn" aria-label="Receptkereső és kedvencek">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.6L18 9.5l-4.2 1.9L12 16l-1.8-4.6L6 9.5l4.2-1.9L12 3Z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8.8-2Z"/></svg>
-          <span>Receptek</span>
-        </button>
-        <input id="q" enterkeyhint="send" placeholder="Mondd vagy írd: tej, 2 kg krumpli…" aria-label="Új tétel">
+        <input id="q" enterkeyhint="send" placeholder="Mit kell venni? pl. tej, 2 kg krumpli" aria-label="Új tétel">
+        <button type="button" class="clear-btn" id="q-clear" aria-label="A mező törlése" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17"/></svg></button>
+        <button type="button" class="mic-btn" id="mic" aria-label="Diktálás bekapcsolása"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5v4"/></svg></button>
         <button class="send" id="send" type="submit" aria-label="Hozzáadás"></button>
       </form>
     </div>
@@ -676,41 +697,13 @@ dialog.step-mode::backdrop { background: var(--bg); }
     <p id="ai-hint" hidden>A már otthon lévő alapokat (só, olaj…) és a listán szereplőket nem jelöltem be.</p>
     <div class="row">
       <button class="btn ghost" type="button" id="ai-cancel">Mégse</button>
+      <button class="btn ghost" type="button" id="ai-view" disabled>Recept megnézése</button>
       <button class="btn ai" type="button" id="ai-add" disabled>Hozzáadás</button>
     </div>
   </div>
 </dialog>
 
 <!-- Recipe search / favourites sheet -->
-<dialog class="sheet tall" id="recipes-sheet" aria-labelledby="rs-title">
-  <div class="sheet-body">
-    <div class="sheet-head">
-      <h3 id="rs-title">Receptek</h3>
-      <button type="button" class="close-btn" id="rs-close" aria-label="Bezárás"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
-    </div>
-    <div class="tabs" role="tablist">
-      <button type="button" role="tab" id="rs-tab-search" aria-selected="true">Keresés</button>
-      <button type="button" role="tab" id="rs-tab-favs" aria-selected="false">Kedvencek</button>
-    </div>
-    <div class="rs-filters">
-      <button type="button" class="gf-toggle" id="rs-gf" aria-pressed="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21V9"/><path d="M12 13c-2.5 0-4-1.5-4-4 2.5 0 4 1.5 4 4Zm0 0c2.5 0 4-1.5 4-4-2.5 0-4 1.5-4 4Zm0-4c-2 0-3.2-1.2-3.2-3.2C10.8 5.8 12 7 12 9Zm0 0c2 0 3.2-1.2 3.2-3.2C13.2 5.8 12 7 12 9Z"/><path d="M4 4l16 16"/></svg>
-        <span>Glutén nélkül</span><b class="gf-state" aria-hidden="true"></b>
-      </button>
-    </div>
-    <div id="rs-body" aria-live="polite"></div>
-    <div id="rs-gsearch" hidden></div>
-    <!-- Ugyanott és ugyanúgy, mint a főoldal beviteli sávja: balra a gomb, középen a mező, jobbra a mikrofon -->
-    <form class="bar rs-bar" id="rs-form" autocomplete="off" role="search">
-      <button type="button" class="mode-btn" id="rs-back" aria-label="Vissza a listához">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
-        <span>Lista</span>
-      </button>
-      <input id="rs-q" type="search" enterkeyhint="search" placeholder="Mondd vagy írd: csirke, leves…" aria-label="Recept keresése">
-      <button type="button" class="send" id="rs-mic" aria-label="Keresés hanggal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5v4"/></svg></button>
-    </form>
-  </div>
-</dialog>
 
 <!-- Recipe detail (Főzés) -->
 <dialog class="sheet tall" id="cook-sheet" aria-labelledby="cook-title">
@@ -722,6 +715,7 @@ dialog.step-mode::backdrop { background: var(--bg); }
     <div id="cook-body"></div>
     <div class="row">
       <button class="btn danger" type="button" id="cook-done">Megfőztük, törölhető</button>
+      <button class="btn ghost" type="button" id="cook-save" hidden>Mentés a Főzés fülre</button>
       <button class="btn" type="button" id="cook-steps">Lépésről lépésre</button>
     </div>
   </div>
