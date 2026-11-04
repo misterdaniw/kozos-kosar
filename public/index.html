@@ -314,7 +314,6 @@ dialog.sheet::backdrop { background: rgba(17,23,39,.45); }
   flex: none; border: 0; border-radius: 14px; padding: 10px 14px; background: var(--bg); color: var(--ink);
   font: 600 15px/1 var(--f-display);
 }
-.send.listening { animation: ring 1.4s ease-out infinite; }
 @keyframes ring { 0% { box-shadow: 0 0 0 0 hsl(8 90% 60% / .55); } 100% { box-shadow: 0 0 0 14px hsl(8 90% 60% / 0); } }
 
 /* Question card */
@@ -423,7 +422,6 @@ dialog.sheet.tall .sheet-body { height: 100%; grid-template-rows: auto auto auto
 .rsite-search svg { width: 17px; height: 17px; flex: none; }
 .rempty { display: grid; justify-items: center; text-align: center; gap: 8px; padding: 26px 10px; color: var(--muted); font-weight: 600; }
 .rempty strong { color: var(--ink); font: 700 20px/1.2 var(--f-display); }
-#rs-mic.listening { animation: ring 1.4s ease-out infinite; }
 
 /* Main tabs: shopping / cooking */
 .main-tabs { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: var(--surface); padding: 4px; border-radius: 18px; margin-bottom: 10px; box-shadow: var(--shadow); }
@@ -485,7 +483,6 @@ dialog.step-mode::backdrop { background: var(--bg); }
 .step-head strong { font: 700 20px/1.2 var(--f-display); overflow-wrap: anywhere; }
 .step-voice { width: 48px; height: 48px; border-radius: 50%; border: 0; background: var(--surface); color: var(--ink); display: grid; place-items: center; flex: none; box-shadow: var(--shadow); }
 .step-voice svg { width: 22px; height: 22px; }
-.step-voice.on { background: var(--accent); color: var(--accent-ink); animation: micpulse 1.3s ease-in-out infinite; }
 .step-progress { display: grid; gap: 6px; font: 600 15px/1 var(--f-display); color: var(--muted); }
 .step-progress .bar { display: block; height: 8px; background: var(--surface); border-radius: 99px; overflow: hidden; }
 .step-progress i { display: block; height: 8px; background: var(--leaf); border-radius: 99px; transition: width .25s; }
@@ -498,18 +495,24 @@ dialog.step-mode::backdrop { background: var(--bg); }
 /* Numbered answer options */
 .qn { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--sun); color: var(--sun-ink); font: 700 12px/1 var(--f-display); margin-right: 6px; }
 
-/* Mic pulses continuously while listening */
-.send.listening, #rs-mic.listening { animation: micpulse 1.3s ease-in-out infinite !important; }
-@keyframes micpulse {
-  0% { transform: scale(1); box-shadow: 0 0 0 0 hsl(8 90% 60% / .6); }
-  50% { transform: scale(1.12); box-shadow: 0 0 0 10px hsl(8 90% 60% / .18); }
-  100% { transform: scale(1); box-shadow: 0 0 0 16px hsl(8 90% 60% / 0); }
+/* Élő mikrofon: minden mikrofongombon ugyanaz – piros gomb, lüktetés és táguló hullámok.
+   Szándékosan akkor is mozog, ha a telefonon ki vannak kapcsolva az animációk: ez állapotjelzés, nem díszítés. */
+.mic-live {
+  position: relative; isolation: isolate; overflow: visible;
+  background: var(--accent) !important; color: var(--accent-ink) !important;
+  animation: micBeat 1.2s ease-in-out infinite !important;
 }
+.mic-live::before, .mic-live::after {
+  content: ""; position: absolute; inset: 0; border-radius: 50%; z-index: -1; pointer-events: none;
+  border: 4px solid var(--accent); background: hsl(8 90% 60% / .18); opacity: 0;
+  animation: micRing 1.6s ease-out infinite !important;
+}
+.mic-live::after { animation-delay: .8s !important; }
+@keyframes micBeat { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+@keyframes micRing { 0% { transform: scale(1); opacity: .95; } 100% { transform: scale(1.9); opacity: 0; } }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
-  .send.listening, #rs-mic.listening, .step-voice.on { animation: micfade 1.6s ease-in-out infinite !important; box-shadow: 0 0 0 4px hsl(8 90% 60% / .35); }
-  @keyframes micfade { 50% { opacity: .55; } }
 }
 </style>
 </head>

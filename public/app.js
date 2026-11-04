@@ -696,7 +696,7 @@ $("#mode-btn").addEventListener("click", () => openRecipes());
 function updateSendBtn() {
   const typed = $("#q").value.trim().length > 0;
   const btn = $("#send");
-  btn.classList.toggle("listening", voice.wantOn);
+  btn.classList.toggle("mic-live", voice.wantOn && voice.mode !== "rsearch" && voice.mode !== "steps");
   if (voice.wantOn) { btn.innerHTML = ICON_MIC; btn.setAttribute("aria-label", "Hallgatlak – koppints a befejezéshez"); }
   else if (!typed && SR) { btn.innerHTML = ICON_MIC; btn.setAttribute("aria-label", "Diktálás"); }
   else { btn.innerHTML = ICON_PLUS; btn.setAttribute("aria-label", "Hozzáadás"); }
@@ -831,11 +831,12 @@ const IDLE_MS = 20000;
 function setListenUI() {
   const on = voice.wantOn;
   $("#listen").hidden = !on;
-  $("#rs-mic").classList.toggle("listening", on && voice.mode === "rsearch");
+  // Ugyanaz az „élő” jelzés mindenhol, mindig a mikrofon tényleges állapota szerint
+  $("#rs-mic").classList.toggle("mic-live", on && voice.mode === "rsearch");
+  $("#step-voice").classList.toggle("mic-live", on && voice.mode === "steps");
   updateSendBtn();
   if (!on) return;
   $("#listen-status").textContent = state.busy ? "Gondolkodom…" : voice.speaking ? "Kérdezek…" : voice.mode === "servings" ? "Hány főre főzöl?" : voice.mode === "rsearch" ? "Mondd, mit keresel!" : voice.mode === "aiq" ? "Melyiket választod?" : voice.mode === "steps" ? "Mondd: „tovább”, „vissza”, „ismételd”" : state.questions.length ? "Mondd ki, melyik kell!" : "Hallgatlak, mondd sorban! A végén: „ennyi”.";
-  $("#rs-mic").classList.toggle("listening", on && voice.mode === "rsearch");
 }
 function setBusy(d) { state.busy = Math.max(0, state.busy + d); setListenUI(); }
 function setHeard(text, result) {
@@ -1396,7 +1397,7 @@ function renderStep() {
   $("#step-text").textContent = x.text;
   $("#step-prev").disabled = step.i === 0;
   $("#step-next").textContent = step.i === n - 1 ? "Kész!" : "Következő ›";
-  $("#step-voice").classList.toggle("on", step.voice);
+  $("#step-voice").classList.toggle("mic-live", voice.wantOn && voice.mode === "steps");
   $("#step-voice").setAttribute("aria-pressed", String(step.voice));
   LS.set(stepKey(r), step.i);
 }
@@ -1414,7 +1415,8 @@ $("#step-next").addEventListener("click", () => goStep(1));
 $("#step-close").addEventListener("click", closeSteps);
 $("#step-voice").addEventListener("click", () => {
   if (!SR) { toast("A hangvezérléshez Chrome kell."); return; }
-  step.voice = !step.voice;
+  // a tényleges mikrofonállapot dönt, így a gomb és a jelzés sosem csúszik el egymástól
+  step.voice = !(voice.wantOn && voice.mode === "steps");
   if (step.voice) { stopListening(); startListening({ mode: "steps" }); speak(`${step.i + 1}. lépés. ${step.r.steps[step.i].text}`); }
   else stopListening();
   renderStep();
