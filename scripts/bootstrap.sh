@@ -114,3 +114,11 @@ for MODEL in $MODELS; do
   echo "GEMINI_TEST $MODEL http=$code $(jq -c '{error: .error.message, status: .error.status, text: (.candidates[0].content.parts[0].text // null)}' /tmp/gem.json 2>/dev/null | cut -c1-300)"
 done
 
+
+echo "== Link-beolvasás próba (ideiglenes)"
+for U in "https://streetkitchen.hu/" "https://www.mindmegette.hu/" "https://hu.wikipedia.org/wiki/Lecs%C3%B3"; do
+  body=$(jq -n --arg t "Olvasd be ezt az oldalt, és írd le egy mondatban, mi van rajta, plusz az első két recept vagy cikk címét és pontos URL-jét: $U" '{contents:[{role:"user",parts:[{text:$t}]}], tools:[{urlContext:{}}]}')
+  code=$(curl -sS -o /tmp/rt.json -w "%{http_code}" -X POST -H "Content-Type: application/json" -H "x-goog-api-key: $APIKEY" -H "X-Firebase-AppId: $APPID" \
+    "https://firebasevertexai.googleapis.com/v1beta/projects/$P/models/gemini-3.5-flash-lite:generateContent" -d "$body")
+  echo "LINK_TEST $U http=$code $(jq -c '{status: (.candidates[0].urlContextMetadata.urlMetadata // [] | map(.urlRetrievalStatus) | join(",")), text: ([.candidates[0].content.parts[]?.text] | join(" ") | .[0:500]), error: .error.message}' /tmp/rt.json 2>/dev/null)"
+done
