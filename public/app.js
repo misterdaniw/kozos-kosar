@@ -99,12 +99,12 @@ Válaszolj kizárólag egyetlen JSON objektummal, más szöveg nélkül, ebben a
 
 const RECIPE_SEARCH_PROMPT = `Egy magyar család receptkeresője vagy. A felhasználó megad egy alapanyagot, ételtípust vagy hangulatot (pl. "csirke", "gyors vacsora", "leves", "sütemény", "vega").
 Keress hozzá recepteket kizárólag a streetkitchen.hu és a mindmegette.hu oldalon (pl. "csirke recept site:streetkitchen.hu", "csirke recept site:mindmegette.hu"), mindkét oldalról vegyesen.
-Adj vissza 6-8 receptet. Mindegyikhez: title (a recept címe magyarul, ahogy az oldalon szerepel), url (a recept oldalának pontos címe, csak olyan, amit a keresési találatokban láttál, ne találj ki címet), site ("Street Kitchen" vagy "Mindmegette"), description (egy rövid, kedvcsináló mondat, saját szavaiddal), minutes (elkészítési idő percben, ha kiderül, különben 0).
-Válaszolj kizárólag egyetlen JSON objektummal, más szöveg nélkül: {"recipes": [{"title": "", "url": "", "site": "", "description": "", "minutes": 0}], "note": ""}`;
+Adj vissza 6-8 receptet. Mindegyikhez: title (a recept címe magyarul, ahogy az oldalon szerepel), url (a recept oldalának pontos címe, csak olyan, amit a keresési találatokban láttál, ne találj ki címet), site ("Street Kitchen" vagy "Mindmegette"), description (egy rövid, kedvcsináló mondat, saját szavaiddal), minutes (elkészítési idő percben, ha kiderül, különben 0), imageQuery (az étel rövid, általános angol neve fotókereséshez, pl. "chicken paprikash", "honey mustard chicken").
+Válaszolj kizárólag egyetlen JSON objektummal, más szöveg nélkül: {"recipes": [{"title": "", "url": "", "site": "", "description": "", "minutes": 0, "imageQuery": ""}], "note": ""}`;
 
 const RECIPE_IDEAS_PROMPT = `Egy magyar család receptötlet-adója vagy. A felhasználó megad egy alapanyagot, ételtípust vagy hangulatot (pl. "csirke", "gyors vacsora", "leves", "sütemény").
 Adj 8 változatos ötletet olyan ételekre, amelyek a magyar receptoldalakon (Street Kitchen, Mindmegette) gyakoriak: klasszikus magyar ételek és népszerű modern fogások vegyesen, otthon elkészíthetőek.
-title: az étel szokásos magyar neve (rövid, pl. "Paprikás csirke nokedlivel"). description: egy rövid, kedvcsináló mondat. minutes: becsült elkészítési idő percben.
+title: az étel szokásos magyar neve (rövid, pl. "Paprikás csirke nokedlivel"). description: egy rövid, kedvcsináló mondat. minutes: becsült elkészítési idő percben. imageQuery: az étel rövid, általános angol neve fotókereséshez (pl. "chicken paprikash", "chicken broccoli pasta", "honey mustard chicken").
 Ha a kérés nem ételről szól, a recipes legyen üres, és a note mezőben kérj pontosítást.`;
 
 // „Glutén nélkül” szűrő: búza, árpa, rozs és minden belőlük készült termék kizárása
@@ -225,8 +225,9 @@ function createDemoBackend() {
       const words = norm(query).split(/\s+/).filter((w) => w.length > 2).map((w) => w.slice(0, 5));
       const seen = new Set(exclude.map(norm));
       const hits = DEMO_IDEAS.filter(([t, k, , , gl]) => words.some((w) => norm(t + " " + k).includes(w)) && !seen.has(norm(t)) && !(glutenFree && gl)).slice(0, 3);
+      const EN = { "Paprikás csirke nokedlivel": "chicken paprikash", "Rántott csirke": "breaded fried chicken", "Mézes-mustáros csirkecomb": "honey mustard chicken", "Csirkés-brokkolis tészta": "chicken broccoli pasta", "Csirkepörkölt": "chicken paprikash", "Lecsó": "lecsó", "Gulyásleves": "goulash soup", "Bolognai spagetti": "spaghetti bolognese", "Rakott krumpli": "rakott krumpli", "Palacsinta": "palacsinta crepes" };
       return {
-        recipes: hits.map(([title, , description, minutes]) => ({ title, description, minutes, url: "", site: "" })),
+        recipes: hits.map(([title, , description, minutes]) => ({ title, description, minutes, url: "", site: "", imageQuery: EN[title] || "" })),
         note: hits.length ? "Demó ötletek. A beállított appban a Street Kitchen és a Mindmegette receptjeit listázza."
           : "Demó módban csak néhány ételt ismerek (pl. csirke, tészta, leves, lecsó, palacsinta).",
       };
@@ -361,7 +362,7 @@ async function createFirebaseBackend(cfg) {
         responseMimeType: "application/json",
         responseSchema: Schema.object({
           properties: {
-            recipes: Schema.array({ items: Schema.object({ properties: { title: Schema.string(), description: Schema.string(), minutes: Schema.integer() } }) }),
+            recipes: Schema.array({ items: Schema.object({ properties: { title: Schema.string(), description: Schema.string(), minutes: Schema.integer(), imageQuery: Schema.string() } }) }),
             note: Schema.string(),
           },
           optionalProperties: ["note"],
@@ -439,7 +440,7 @@ async function createFirebaseBackend(cfg) {
         const meta = res.response.candidates?.[0]?.groundingMetadata;
         const recipes = (d.recipes || []).map((r) => {
           const ok = r.url && isRecipeSite(r.url);
-          return { title: r.title, description: r.description || "", minutes: +r.minutes || 0, url: ok ? r.url : "", site: ok ? siteOf(r.url) : "" };
+          return { title: r.title, description: r.description || "", minutes: +r.minutes || 0, url: ok ? r.url : "", site: ok ? siteOf(r.url) : "", imageQuery: r.imageQuery || "" };
         }).filter((r) => r.title);
         return { recipes, note: d.note || "", searchEntryPoint: meta?.searchEntryPoint?.renderedContent || "",
           searchSources: (meta?.groundingChunks || []).map((c) => c.web).filter(Boolean).slice(0, 5) };
@@ -996,10 +997,10 @@ updateSendBtn();
 
 /* AI javaslat lap */
 const aiSheet = $("#ai-sheet");
-async function runSuggest(prompt, { spoken = false, fromSearch = false, title = "" } = {}) {
+async function runSuggest(prompt, { spoken = false, fromSearch = false, title = "", imageQuery = "" } = {}) {
   const url = (prompt.match(/https?:\/\/\S+/) || [])[0] || null;
   const servings = parseServings(prompt);
-  state.recipe = { prompt: url ? prompt : (stripServings(prompt) || prompt), url, servings, spoken, fromSearch, knownTitle: title };
+  state.recipe = { prompt: url ? prompt : (stripServings(prompt) || prompt), url, servings, spoken, fromSearch, knownTitle: title, imageQuery };
   $("#ai-back").hidden = !fromSearch;
   renderAiFav();
   state.suggestion = null;
@@ -1260,24 +1261,28 @@ function onSearchSpeech(txt) {
 function pickRecipe(r, { spoken = false } = {}) {
   rSheet.close();
   if (spoken && SR) startListening({ mode: "servings" }); // hanggal válaszolhatsz a „Hány főre?” kérdésre
-  runSuggest(r.url || r.title, { fromSearch: true, title: r.title, spoken });
+  runSuggest(r.url || r.title, { fromSearch: true, title: r.title, spoken, imageQuery: r.imageQuery || "" });
 }
 
 // Ételfotók a találatokhoz: Wikipédia (memóriában és a telefonon gyorsítótárazva), addig rajzos kép
-const dishImageCache = new Map(Object.entries(LS.get("kk:dishimg", {})));
+// gyorsítótár: kulcs → kép URL, vagy {none: időbélyeg}, ha biztosan nincs (3 nap után újra próbálja)
+LS.del("kk:dishimg"); // a régi gyorsítótár hibásan „nincs kép”-ként jegyezte meg a hálózati hibákat
+const dishImageCache = new Map(Object.entries(LS.get("kk:dishimg2", {})));
+const NONE_TTL = 3 * 864e5;
 const dishImagePending = new Set();
 function loadResultImages() {
   document.querySelectorAll("#rs-body img.rimg[data-imgkey]").forEach((img) => {
     const key = img.dataset.imgkey;
     const cached = dishImageCache.get(key);
-    if (cached) { if (img.getAttribute("src") !== cached) img.src = cached; return; }
-    if (cached === "" || dishImagePending.has(key)) return; // már kerestük, nincs kép
+    if (typeof cached === "string" && cached) { if (img.getAttribute("src") !== cached) img.src = cached; return; }
+    if ((cached?.none && Date.now() - cached.none < NONE_TTL) || dishImagePending.has(key)) return;
     dishImagePending.add(key);
-    findWikiImage(img.closest(".rcard")?.querySelector("strong")?.textContent || key).then((found) => {
+    findDishImage(img.closest(".rcard")?.querySelector("strong")?.textContent || key, img.dataset.en || "").then((found) => {
       dishImagePending.delete(key);
-      dishImageCache.set(key, found?.image || "");
-      try { LS.set("kk:dishimg", Object.fromEntries([...dishImageCache].slice(-200))); } catch {}
-      if (found?.image) document.querySelectorAll(`#rs-body img.rimg[data-imgkey="${CSS.escape(key)}"]`).forEach((el) => { el.src = found.image; });
+      if (found.error) return; // hálózati hiba: nem jegyezzük meg, legközelebb újra próbálja
+      dishImageCache.set(key, found.image || { none: Date.now() });
+      try { LS.set("kk:dishimg2", Object.fromEntries([...dishImageCache].slice(-300))); } catch {}
+      if (found.image) document.querySelectorAll(`#rs-body img.rimg[data-imgkey="${CSS.escape(key)}"]`).forEach((el) => { el.src = found.image; });
     });
   });
 }
@@ -1291,10 +1296,11 @@ function recipeCard(r, i, src) {
     ? `<a class="rlink" href="${esc(r.url)}" target="_blank" rel="noopener" aria-label="Recept megnyitása az oldalon">${ICON_OUT}</a>`
     : `<a class="rlink" href="${esc(siteSearchUrl(r.title))}" target="_blank" rel="noopener" aria-label="Keresés a Street Kitchenen és a Mindmegettén">${ICON_OUT}</a>`;
   const imgKey = norm(r.title);
-  const known = r.image || dishImageCache.get(imgKey);
+  const c = dishImageCache.get(imgKey);
+  const known = r.image || (typeof c === "string" ? c : "");
   return `<li class="rcard">
     <button type="button" class="rmain" data-pick="${i}">
-      <img class="rimg" data-imgkey="${esc(imgKey)}" src="${esc(known || dishArt(r.title))}" alt="" loading="lazy" referrerpolicy="no-referrer"
+      <img class="rimg" data-imgkey="${esc(imgKey)}" data-en="${esc(r.imageQuery || "")}" src="${esc(known || dishArt(r.title))}" alt="" loading="lazy" referrerpolicy="no-referrer"
         onerror="this.onerror=null;this.src='${dishArt(r.title).replace(/'/g, "%27")}'">
       <span class="rtext">
         <span class="rchips"><span class="rsite ${siteCls}">${esc(site || "Ötlet")}</span>${r.gf ? `<span class="rsite gf">Glutén nélkül</span>` : ""}</span>
@@ -1399,7 +1405,7 @@ $("#ai-add").addEventListener("click", async () => {
     // A recept a Főzés fülre is felkerül (összes hozzávalóval és a lépésekkel)
     const cookEntry = {
       title: source || "Recept", servings: state.recipe?.servings || 4, minutes: s.minutes || 0,
-      sourceSite: sourceLabel(s), sourceUrl, image: s.imageUrl || "", imageCredit: s.imageUrl ? sourceLabel(s) : "",
+      sourceSite: sourceLabel(s), sourceUrl, image: s.imageUrl || "", imageCredit: s.imageUrl ? sourceLabel(s) : "", imageQuery: state.recipe?.imageQuery || "",
       ingredients: s.items.slice(0, 60).map((it) => ({ name: String(it.name || "").slice(0, 100), qty: String(it.qty || "").slice(0, 30) })),
       steps: (s.steps || []).slice(0, 20), by: me.name,
     };
@@ -1451,25 +1457,59 @@ const recipeImg = (src, cls, fallbackTitle) => {
 };
 
 // Kép keresése a Wikipédián (magyar, majd angol), ha a receptnek nincs saját fotója
-async function findWikiImage(title) {
-  const q = String(title).replace(/,.*$/, "").replace(/\b(recept|házi|klasszikus|egyszerű|gyors)\b/gi, "").trim();
-  for (const lang of ["hu", "en"]) {
-    try {
-      const url = `https://${lang}.wikipedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrlimit=5&gsrsearch=${encodeURIComponent(q)}&prop=pageimages&piprop=thumbnail&pithumbsize=800&pilicense=free`;
-      const d = await (await fetch(url)).json();
-      const pages = Object.values(d?.query?.pages || {}).sort((a, b) => (a.index || 0) - (b.index || 0));
-      const hit = pages.find((p) => p.thumbnail?.source && !/\.svg/i.test(p.thumbnail.source));
-      if (hit) return { image: hit.thumbnail.source, imageCredit: `Wikipédia – ${hit.title}` };
-    } catch (e) { console.warn("Wikipédia kép", e); }
-  }
-  return null;
+// Ételfotó keresése: magyar Wikipédia → angol Wikipédia (angol ételnévvel) → Wikimedia Commons fotótár.
+// Csak releváns találatot fogad el (a cím és a találat szavai egyezzenek), hogy ne jöjjön kép rossz ételről.
+const stems = (t) => norm(t).replace(/[^0-9a-záéíóöőúüű ]/g, " ").split(/\s+/).filter((w) => w.length >= 4 && !/^(with|and|recept|házi|klasszikus|egyszerű|gyors|file|jpeg|módra|tálalva|sütőben)$/.test(w)).map((w) => w.slice(0, 5));
+function relevant(candidate, query, need) {
+  const q = stems(query), c = stems(candidate);
+  if (!q.length) return false;
+  const hits = q.filter((w) => c.some((x) => x.startsWith(w.slice(0, 4)) || w.startsWith(x.slice(0, 4)))).length;
+  return hits >= Math.min(need, q.length);
 }
+const imgQueue = { running: 0, waiting: [] };
+async function throttled(fn) { // egyszerre legfeljebb 2 kérés a Wikimédia felé
+  if (imgQueue.running >= 2) await new Promise((r) => imgQueue.waiting.push(r));
+  imgQueue.running++;
+  try { return await fn(); } finally { imgQueue.running--; imgQueue.waiting.shift()?.(); }
+}
+async function getJson(url) {
+  const res = await throttled(() => fetch(url));
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+async function wikiImage(lang, q) {
+  const d = await getJson(`https://${lang}.wikipedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrlimit=6&gsrsearch=${encodeURIComponent(q)}&prop=pageimages&piprop=thumbnail&pithumbsize=800&pilicense=free`);
+  const pages = Object.values(d?.query?.pages || {}).sort((a, b) => (a.index || 0) - (b.index || 0));
+  const hit = pages.find((p) => p.thumbnail?.source && !/\.svg/i.test(p.thumbnail.source) && relevant(p.title, q, 1));
+  return hit ? { image: hit.thumbnail.source, imageCredit: `Wikipédia – ${hit.title}` } : null;
+}
+async function commonsImage(q) {
+  const d = await getJson(`https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=6&gsrlimit=10&gsrsearch=${encodeURIComponent(q + " filetype:bitmap")}&prop=imageinfo&iiprop=url|mime&iiurlwidth=800`);
+  const pages = Object.values(d?.query?.pages || {}).sort((a, b) => (a.index || 0) - (b.index || 0));
+  const hit = pages.find((p) => /jpeg|png|webp/.test(p.imageinfo?.[0]?.mime || "") && p.imageinfo[0].thumburl && relevant(p.title.replace(/^File:/, ""), q, 2));
+  return hit ? { image: hit.imageinfo[0].thumburl, imageCredit: "Wikimedia Commons" } : null;
+}
+// Eredmény: {image, imageCredit} | {none:true} (biztosan nincs) | {error:true} (hálózati hiba – később újrapróbálható)
+async function findDishImage(title, enQuery = "") {
+  const hu = String(title).replace(/,.*$/, "").trim();
+  const attempts = [() => wikiImage("hu", hu)];
+  if (enQuery) attempts.push(() => wikiImage("en", enQuery), () => commonsImage(enQuery));
+  attempts.push(() => commonsImage(hu));
+  let errors = 0;
+  for (const a of attempts) {
+    try { const r = await a(); if (r) return r; } catch (e) { errors++; console.warn("Képkeresés", e); }
+  }
+  return errors ? { error: true } : { none: true };
+}
+async function findWikiImage(title, enQuery) { const r = await findDishImage(title, enQuery); return r.image ? r : null; }
+
 const imageTried = new Set();
 async function ensureCookImage(r) {
   if (!r?.id || r.image || imageTried.has(r.id)) return;
   imageTried.add(r.id);
-  const found = await findWikiImage(r.title || "");
-  if (found) { try { await backend.updateCooking(state.listId, r.id, found); } catch (e) { console.warn(e); } }
+  const found = await findDishImage(r.title || "", r.imageQuery || "");
+  if (found.error) { imageTried.delete(r.id); return; } // később újra próbálja
+  if (found.image) { try { await backend.updateCooking(state.listId, r.id, { image: found.image, imageCredit: found.imageCredit }); } catch (e) { console.warn(e); } }
 }
 
 function renderCooking() {
