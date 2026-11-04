@@ -1480,7 +1480,7 @@ async function getJson(url) {
 async function wikiImage(lang, q) {
   const d = await getJson(`https://${lang}.wikipedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrlimit=6&gsrsearch=${encodeURIComponent(q)}&prop=pageimages&piprop=thumbnail&pithumbsize=800&pilicense=free`);
   const pages = Object.values(d?.query?.pages || {}).sort((a, b) => (a.index || 0) - (b.index || 0));
-  const hit = pages.find((p) => p.thumbnail?.source && !/\.svg/i.test(p.thumbnail.source) && relevant(p.title, q, 1));
+  const hit = pages.find((p) => p.thumbnail?.source && /\.(jpe?g|webp)(\?|$|\/)/i.test(p.thumbnail.source) && relevant(p.title, q, 2));
   return hit ? { image: hit.thumbnail.source, imageCredit: `Wikipédia – ${hit.title}` } : null;
 }
 async function commonsImage(q) {
@@ -1493,7 +1493,7 @@ async function commonsImage(q) {
 async function findDishImage(title, enQuery = "") {
   const hu = String(title).replace(/,.*$/, "").trim();
   const attempts = [() => wikiImage("hu", hu)];
-  if (enQuery) attempts.push(() => wikiImage("en", enQuery), () => commonsImage(enQuery));
+  if (enQuery) attempts.push(() => commonsImage(enQuery), () => wikiImage("en", enQuery));
   attempts.push(() => commonsImage(hu));
   let errors = 0;
   for (const a of attempts) {
