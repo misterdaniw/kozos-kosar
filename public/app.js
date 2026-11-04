@@ -1236,7 +1236,7 @@ async function searchRecipes(query, { spoken = false } = {}) {
       const fresh = (r.recipes || []).filter((x) => !seen.has(favKey(x)));
       fresh.forEach((x) => { x.isNew = cached.length > 0; });
       markGf(fresh);
-      Object.assign(S, { results: cached.length ? fresh.concat(S.results) : fresh, loading: false, bg: false, mode: "site", nextOffset: r.nextOffset || 10, noMore: !!r.exhausted && !fresh.length });
+      Object.assign(S, { results: cached.length ? fresh.concat(S.results) : fresh, loading: false, bg: false, mode: "site", nextOffset: r.nextOffset || 20, noMore: !!r.exhausted && !fresh.length });
       if (S.results.length) {
         renderRecipes();
         if (cached.length && fresh.length) toast(`${fresh.length} új recept érkezett a Street Kitchenről és a Mindmegettéről`, null, "ok");
@@ -1275,7 +1275,7 @@ async function moreRecipes() {
   try {
     let incoming = [], exhausted = false;
     if (S.mode === "site" && backend.siteSearch) {
-      const r = await backend.siteSearch(siteQuery(query), S.nextOffset || 10);
+      const r = await backend.siteSearch(siteQuery(query), S.nextOffset || 20);
       incoming = r.recipes || []; exhausted = !!r.exhausted; S.nextOffset = r.nextOffset;
       markGf(incoming);
     } else {

@@ -26,9 +26,11 @@ function siteOf(url) {
 function looksLikeRecipe(url, title) {
   let path = "";
   try { path = new URL(url).pathname.toLowerCase(); } catch { return false; }
-  if (!path || path === "/" || /\/(cimke|tag|kategoria|category|szerzo|author|kereses|search|video|cikk|magazin|hirek|hir)\b/.test(path)) return false;
-  if (/recept/.test(path)) return true;
-  return /recept|leves|csirke|sült|torta|süti|tészta|saláta|pörkölt|főzelék/.test(norm(title));
+  if (!path || path === "/") return false;
+  // gyűjtő-, kategória-, címke-, szerzői és cikkoldalak kizárása
+  if (/\/(cimke|kategori|valogatas|gyujtemeny|tag|category|szerzo|author|kereses|search|video|cikk|magazin|hir|tipp|lexikon|cikkek)/.test(path)) return false;
+  if (/\breceptek\b|válogatás|gyűjtemény/i.test(title)) return false; // „Csirkemell receptek” típusú gyűjtőoldalak
+  return /\/(receptek|recept)\/|\.recept\/?$|\/recept-/.test(path) || /recept/.test(path);
 }
 const cleanTitle = (t) => String(t || "").replace(/\s*[|–-]\s*(Street ?Kitchen|Mindmegette(\.hu)?).*$/i, "").replace(/\s+recept$/i, "").trim();
 
@@ -50,7 +52,7 @@ async function siteSearch(query, offset) {
   const url = `https://discoveryengine.googleapis.com/v1/projects/${project}/locations/global/collections/default_collection/engines/${ENGINE}/servingConfigs/default_search:search`;
   const res = await client.request({
     url, method: "POST",
-    data: { query: `${query} recept`, pageSize: 10, offset, languageCode: "hu", spellCorrectionSpec: { mode: "AUTO" } },
+    data: { query: `${query} recept`, pageSize: 20, offset, languageCode: "hu", spellCorrectionSpec: { mode: "AUTO" } },
   });
   return res.data?.results || [];
 }
@@ -92,10 +94,10 @@ export const searchRecipes = onCall(async (req) => {
     }, { merge: true });
   }
   batch.set(db.collection("recipeQueries").doc(docId(query)), {
-    query, lastOffset: offset, nextOffset: offset + 10, exhausted: raw.length < 10,
+    query, lastOffset: offset, nextOffset: offset + 20, exhausted: raw.length < 20,
     count: FieldValue.increment(found.length), updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
   await batch.commit();
 
-  return { recipes: found, nextOffset: offset + 10, exhausted: raw.length < 10 };
+  return { recipes: found, nextOffset: offset + 20, exhausted: raw.length < 20 };
 });
