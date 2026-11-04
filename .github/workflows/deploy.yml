@@ -60,6 +60,13 @@ jobs:
         id: boot
         run: bash scripts/bootstrap.sh 2>&1 | tee bootstrap.log; exit ${PIPESTATUS[0]}
 
+      - name: Verzió azonosító (a frissítés-értesítőhöz)
+        run: |
+          B="${GITHUB_SHA::7}-$(date -u +%Y%m%d%H%M%S)"
+          sed -i "s/__APP_BUILD__/$B/" public/app.js
+          echo "{\"build\":\"$B\"}" > public/version.json
+          grep -c "$B" public/app.js public/version.json
+
       - name: Szerverfüggvény csomagjai
         if: steps.boot.outputs.billing == 'true'
         run: cd functions && npm ci --no-audit --no-fund

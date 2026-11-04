@@ -9,6 +9,12 @@
 <meta name="theme-color" content="#EAF3FB" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#111727" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="manifest.webmanifest">
+<link rel="modulepreload" href="app.js">
+<link rel="modulepreload" href="parser.js">
+<link rel="modulepreload" href="config.js">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js" crossorigin>
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js" crossorigin>
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js" crossorigin>
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -30,6 +36,8 @@
   --leaf: #23A86B;
   --leaf-ink: #FFFFFF;
   --danger: #D23B2A;
+  --soft: #F5FAFE;
+  --soft-ink: #3A6FA8;
   --tile-l: 91%;
   --icon-l: 38%;
   --chip-l: 95%;
@@ -44,7 +52,7 @@
     --bg: #111727; --surface: #1A2236; --ink: #EEF2FA; --muted: #9AA7C2; --line: #263049;
     --accent: #FF7558; --accent-ink: #1A0A05; --sun: #FFD25E; --sun-ink: #2B2100; --sun-soft: #2E2815;
     --leaf: #4CD39A; --leaf-ink: #06281A; --danger: #FF7B69;
-    --tile-l: 24%; --icon-l: 74%; --chip-l: 20%; --ring-l: 58%;
+    --tile-l: 24%; --icon-l: 74%; --chip-l: 20%; --ring-l: 58%; --soft: #1C2742; --soft-ink: #9CC3EE;
     --shadow: 0 1px 0 rgba(0,0,0,.3), 0 12px 28px -12px rgba(0,0,0,.6);
     color-scheme: dark;
   }
@@ -53,7 +61,7 @@
   --bg: #111727; --surface: #1A2236; --ink: #EEF2FA; --muted: #9AA7C2; --line: #263049;
   --accent: #FF7558; --accent-ink: #1A0A05; --sun: #FFD25E; --sun-ink: #2B2100; --sun-soft: #2E2815;
   --leaf: #4CD39A; --leaf-ink: #06281A; --danger: #FF7B69;
-  --tile-l: 24%; --icon-l: 74%; --chip-l: 20%; --ring-l: 58%;
+  --tile-l: 24%; --icon-l: 74%; --chip-l: 20%; --ring-l: 58%; --soft: #1C2742; --soft-ink: #9CC3EE;
   --shadow: 0 1px 0 rgba(0,0,0,.3), 0 12px 28px -12px rgba(0,0,0,.6);
   color-scheme: dark;
 }
@@ -584,6 +592,23 @@ dialog.step-mode::backdrop { background: var(--bg); }
 .main-tabs svg { width: 17px; height: 17px; }
 .row > #ai-view { flex-basis: 100%; }
 
+/* Kicsi, halványkék beállítás gomb (épp csak világosabb a háttérnél) */
+.settings-btn {
+  width: 38px; height: 38px; border-radius: 12px; flex: none; display: grid; place-items: center;
+  background: var(--soft); color: var(--soft-ink); border: 1px solid hsl(210 60% 50% / .14);
+}
+.settings-btn svg { width: 19px; height: 19px; }
+.top .wrap { padding-block: 10px 8px; }
+.title-btn .sub { margin-top: 0; }
+
+/* Frissítés-értesítő sáv */
+.update-bar {
+  display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;
+  padding: 8px max(16px, env(safe-area-inset-right, 0px)) 8px max(16px, env(safe-area-inset-left, 0px));
+  background: var(--sun); color: var(--sun-ink); font: 600 15px/1.2 var(--f-display);
+}
+.update-bar button { border: 0; border-radius: 99px; padding: 8px 16px; background: var(--ink); color: var(--bg); font: 600 14.5px/1 var(--f-display); }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
@@ -623,14 +648,16 @@ dialog.step-mode::backdrop { background: var(--bg); }
 <!-- App -->
 <div id="app" hidden>
   <header class="top">
+    <div class="update-bar" id="update-bar" role="status" hidden>
+      <span>Új verzió érhető el.</span>
+      <button type="button" id="update-now">Frissítés</button>
+    </div>
     <div class="wrap">
-      <button class="title-btn" id="open-list" aria-label="Lista beállításai">
-        <p class="hello" id="hello">Szia!</p>
-        <h1 id="list-name">Lista</h1>
+      <button class="title-btn" id="open-list" aria-label="Család és beállítások">
         <div class="sub"><span class="faces" id="faces"></span><span id="list-sub"></span></div>
       </button>
-      <button class="icon-btn" id="share-btn" aria-label="Családtag meghívása">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>
+      <button class="settings-btn" id="share-btn" aria-label="Beállítások és családtagok meghívása">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
       </button>
     </div>
     <div class="wrap">

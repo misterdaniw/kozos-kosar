@@ -4,6 +4,8 @@
 import { CATS, norm, guessCategory, parseSpoken, matchAnswer, matchOption, splitStop, SKIP, parseServings, stripServings, scaleQty } from "./parser.js";
 
 const FIREBASE_CDN = "https://www.gstatic.com/firebasejs/13.1.0";
+// A feltöltési folyamat ide írja be a verzió azonosítóját (és ugyanezt a version.json-ba)
+const APP_BUILD = "__APP_BUILD__";
 const CAT_HUE = [135, 6, 208, 30, 44, 190, 268, 322, 222];
 const svg = (inner) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
 // Kategória ikonok (sorrend = CATS)
@@ -67,7 +69,7 @@ Szabályok:
 - gluten=true minden hozzávalóra, amely búzát, árpát vagy rozsot tartalmaz, különben false.
 - A kategória a megadott listából legyen.
 - title: rövid cím, pl. "Lecsó, 4 adag".
-- steps: az elkészítés lépései röviden, saját szavaiddal (legfeljebb 10 lépés, mindegyik 1-3 mondat), a megadott létszámra. minutes: a teljes elkészítési idő percben.
+- steps: MINDIG add meg az elkészítés lépéseit röviden, saját szavaiddal (4-10 lépés, mindegyik 1-3 mondat), a megadott létszámra. minutes: a teljes elkészítési idő percben.
 - Ha a kérés nem egyértelmű, és a válasz lényegesen megváltoztatná a listát (pl. "valami vacsorát" vagy "sütit" – milyet?), adj vissza üres items listát, és a question mezőben kérdezz vissza röviden, az options mezőben 2-4 rövid válaszlehetőséggel. Apróságon (adagszám hiánya, márka) ne kérdezz.
 - Ha a kérés nem értelmezhető ételként vagy bevásárlásként, adj vissza üres items listát, és a note mezőben röviden írd le, mit vársz.`;
 
@@ -262,12 +264,18 @@ async function createFirebaseBackend(cfg) {
   ]);
   const app = initializeApp(cfg.firebase);
 
-  // App Check: a Firebase AI Logic-hoz kötelező (2026. nov. 2-től automatikusan kikényszerítve)
-  if (cfg.appCheck?.siteKey) {
-    if (["localhost", "127.0.0.1"].includes(location.hostname)) self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
-    const ac = await import(`${FIREBASE_CDN}/firebase-app-check.js`);
-    const Provider = cfg.appCheck.provider === "enterprise" ? ac.ReCaptchaEnterpriseProvider : ac.ReCaptchaV3Provider;
-    ac.initializeAppCheck(app, { provider: new Provider(cfg.appCheck.siteKey), isTokenAutoRefreshEnabled: true });
+  // App Check: csak a Geminihez kell, ezért csak az első AI-kérésnél töltjük be.
+  // (Ha induláskor töltenénk, az adatbázis első kérései is megvárnák a reCAPTCHA-t – ez lassította az indulást.)
+  let appCheckReady = null;
+  function ensureAppCheck() {
+    if (appCheckReady || !cfg.appCheck?.siteKey) return appCheckReady;
+    appCheckReady = (async () => {
+      if (["localhost", "127.0.0.1"].includes(location.hostname)) self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+      const ac = await import(`${FIREBASE_CDN}/firebase-app-check.js`);
+      const Provider = cfg.appCheck.provider === "enterprise" ? ac.ReCaptchaEnterpriseProvider : ac.ReCaptchaV3Provider;
+      ac.initializeAppCheck(app, { provider: new Provider(cfg.appCheck.siteKey), isTokenAutoRefreshEnabled: true });
+    })();
+    return appCheckReady;
   }
 
   const auth = authMod.getAuth(app);
@@ -298,7 +306,7 @@ async function createFirebaseBackend(cfg) {
   let model = null, interpreter = null, urlModel = null, searchModel = null, ideasModel = null, listModel = null;
   async function getModel() {
     if (model) return model;
-    const aiMod = await import(`${FIREBASE_CDN}/firebase-ai.js`);
+    const [aiMod] = await Promise.all([import(`${FIREBASE_CDN}/firebase-ai.js`), ensureAppCheck()]);
     const { getAI, getGenerativeModel, GoogleAIBackend, Schema } = aiMod;
     // Blaze csomaggal a Gemini a Google Cloud (Agent Platform) szolgáltatáson fut, utólagos számlázással;
     // a Gemini Developer API fizetős módban előre fizetett kreditet kérne
@@ -362,7 +370,7 @@ async function createFirebaseBackend(cfg) {
           }),
         }),
       },
-      optionalProperties: ["note", "question", "options", "minutes", "steps"],
+      optionalProperties: ["note", "question", "options", "minutes"],
     });
     model = resilient({
       systemInstruction: SYSTEM_PROMPT,
@@ -528,7 +536,31 @@ const settings = { autoListen: LS.get("kk:autoListen2", false), speak: LS.get("k
 let backend;
 let me = { uid: null, name: "" };
 
+// Az utolsó ismert állapot a telefonon: induláskor azonnal ezt mutatjuk, amíg a Firebase betölt
+let snapTimer;
+function saveSnapshot() {
+  if (backend?.mode !== "live") return;
+  clearTimeout(snapTimer);
+  snapTimer = setTimeout(() => {
+    try {
+      LS.set("kk:snap", { id: state.listId, list: state.list, items: state.items.slice(0, 400),
+        favorites: state.favorites.slice(0, 100), cooking: state.cooking.slice(0, 20) });
+    } catch {}
+  }, 400);
+}
+function showSnapshot() {
+  const snap = LS.get("kk:snap", null);
+  if (!snap?.id || !snap.list || snap.id !== LS.get("kk:live:list", null) || !LS.get("kk:name", "")) return false;
+  me = { uid: null, name: LS.get("kk:name", "") };
+  Object.assign(state, { listId: snap.id, list: snap.list, items: snap.items || [], favorites: snap.favorites || [], cooking: snap.cooking || [], firstLoad: true });
+  $("#onboard").hidden = true; $("#app").hidden = false;
+  renderHeader(); renderItems(); renderCooking(); updateSendBtn();
+  return true;
+}
+
 async function boot() {
+  if (!window.KK_DEMO_ONLY && !backend) showSnapshot();
+  checkForUpdate();
   let cfg = null;
   if (!window.KK_DEMO_ONLY) {
     try { cfg = (await import("./config.js")).default; } catch { cfg = null; }
@@ -631,10 +663,10 @@ function openList(id) {
       if (!list.members?.[me.uid]) { leaveToOnboarding(); return; }
       renderHeader();
     },
-    (items) => { state.items = items; renderItems(); },
+    (items) => { state.items = items; renderItems(); saveSnapshot(); },
     (err) => { console.error(err); leaveToOnboarding("Ez a lista már nem érhető el."); },
-    (favs) => { state.favorites = favs; renderRecipes(); renderAiFav(); },
-    (cook) => { state.cooking = cook; renderCooking(); });
+    (favs) => { state.favorites = favs; renderRecipes(); renderAiFav(); saveSnapshot(); },
+    (cook) => { state.cooking = cook; renderCooking(); saveSnapshot(); });
   // Alapból hanggal: megnyitáskor rögtön elindul a hallgatás (ha a böngésző engedi)
   if (state.pendingShare) { const sh = state.pendingShare; state.pendingShare = null; state.autoTried = true; setTimeout(() => runSuggest(sh), 400); }
   if (settings.autoListen && SR && !state.autoTried && !window.KK_DEMO_ONLY) { state.autoTried = true; setTimeout(() => startListening({ auto: true }), 600); }
@@ -651,11 +683,9 @@ function leaveToOnboarding(msg) {
 /* Fejléc */
 function renderHeader() {
   const L = state.list; if (!L) return;
-  $("#list-name").textContent = L.name;
   document.title = `${L.name} · Közös Kosár`;
   const names = Object.values(L.members || {});
   $("#faces").innerHTML = names.slice(0, 5).map((n) => face(n)).join("");
-  $("#hello").textContent = me.name && me.name !== "Én" ? `Szia, ${me.name}!` : "Szia!";
   renderSub();
 }
 function renderSub() {
@@ -716,8 +746,10 @@ function renderItems() {
   renderSub();
 }
 
+const notReady = () => { if (backend) return false; toast("Egy pillanat, csatlakozom…", null, "info"); return true; };
 $("#groups").addEventListener("click", async (e) => {
   const btn = e.target.closest("[data-act]"); if (!btn) return;
+  if (notReady()) return;
   const act = btn.dataset.act;
   try {
     if (act === "clear-done") {
@@ -772,6 +804,7 @@ $("#bar").addEventListener("submit", async (e) => {
   e.preventDefault();
   const text = $("#q").value.trim();
   if (!text) { $("#q").focus(); return; }
+  if (notReady()) return;
   $("#q").value = ""; updateSendBtn();
   if (/https?:\/\//.test(text)) return runSuggest(text);
   if (state.tab === "recipes") { if (voice.wantOn) stopListening(); return searchRecipes(text); }
@@ -1174,7 +1207,11 @@ function buildCookEntry(s) {
 }
 $("#ai-view").addEventListener("click", () => {
   const s = state.suggestion; if (!s) return;
-  openCookSheet({ id: "preview", ...buildCookEntry(s) }, { preview: true });
+  const r = { id: "preview", ...buildCookEntry(s) };
+  if (!r.steps.length) { openCookSheet(r, { preview: true }); toast("Ehhez a recepthez nincsenek lépések, csak a hozzávalók.", null, "info"); return; }
+  openSteps(r, { preview: true, fresh: true });
+  // ha nincs saját fotó, keresünk egyet (Wikipédia / Commons), és megjelenítjük
+  if (!r.image) findDishImage(r.title, r.imageQuery).then((f) => { if (f.image && step.r === r) { r.image = f.image; r.imageCredit = f.imageCredit; renderStep(); } });
 });
 
 /* Kedvenc csillag a hozzávaló-lapon */
@@ -1692,9 +1729,10 @@ async function keepAwake(on) {
 }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && stepSheet.open) keepAwake(true); });
 
-function openSteps(r) {
+function openSteps(r, { preview = false, fresh = false } = {}) {
   if (!r?.steps?.length) return;
-  step.r = r; step.i = Math.min(LS.get(stepKey(r), 0), r.steps.length - 1);
+  step.preview = preview;
+  step.r = r; step.i = fresh ? 0 : Math.min(LS.get(stepKey(r), 0), r.steps.length - 1);
   renderStep();
   stepSheet.showModal();
   keepAwake(true);
@@ -1711,13 +1749,16 @@ function renderStep() {
   $("#step-next").textContent = step.i === n - 1 ? "Kész!" : "Következő ›";
   $("#step-voice").classList.toggle("mic-live", voice.wantOn && voice.mode === "steps");
   $("#step-voice").setAttribute("aria-pressed", String(step.voice));
-  LS.set(stepKey(r), step.i);
+  if (!step.preview) LS.set(stepKey(r), step.i);
 }
 function goStep(d) {
   const n = step.r.steps.length;
   if (d > 0 && step.i === n - 1) {
     const r = step.r; closeSteps();
-    toast("Jó étvágyat! Ha megfőztétek, törölheted a Főzés fülről.", { label: "Törlés", run: () => deleteCooking(r) }, "ok");
+    if (step.preview) {
+      const { id, ...entry } = r;
+      toast("Ez volt az utolsó lépés. Elteszed a receptet a Főzés fülre?", { label: "Mentés", run: async () => { const cid = await backend.addCooking(state.listId, entry); if (!entry.image) ensureCookImage({ id: cid, ...entry }); toast(`„${entry.title}” a Főzés fülre került`, null, "ok"); } }, "info");
+    } else toast("Jó étvágyat! Ha megfőztétek, törölheted a Főzés fülről.", { label: "Törlés", run: () => deleteCooking(r) }, "ok");
     return;
   }
   step.i = Math.max(0, Math.min(n - 1, step.i + d));
@@ -1790,5 +1831,21 @@ $("#leave").addEventListener("click", async () => {
   try { await backend.leaveList(state.listId); listSheet.close(); leaveToOnboarding(); }
   catch (err) { console.error(err); toast("Nem sikerült kilépni."); }
 });
+
+/* Frissítés-értesítő: ha új verzió került fel, egy sáv kéri, hogy frissítsd az appot */
+async function checkForUpdate() {
+  if (window.KK_DEMO_ONLY || APP_BUILD.startsWith("__")) return;
+  try {
+    const v = await (await fetch(`version.json?t=${Date.now()}`, { cache: "no-store" })).json();
+    if (v?.build && v.build !== APP_BUILD) $("#update-bar").hidden = false;
+  } catch { /* offline: majd legközelebb */ }
+}
+$("#update-now").addEventListener("click", async () => {
+  $("#update-now").disabled = true; $("#update-now").textContent = "Frissítés…";
+  try { const reg = await navigator.serviceWorker?.getRegistration(); await reg?.update(); } catch {}
+  location.reload();
+});
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkForUpdate(); });
+setInterval(checkForUpdate, 10 * 60 * 1000);
 
 boot();
