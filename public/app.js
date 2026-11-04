@@ -1126,6 +1126,7 @@ function openRecipes(query = null, { spoken = false, keep = false } = {}) {
 rSheet.addEventListener("close", () => { if (voice.wantOn && voice.mode === "rsearch") stopListening(); });
 rSheet.addEventListener("click", (e) => { if (e.target === rSheet) rSheet.close(); });
 $("#rs-close").addEventListener("click", () => rSheet.close());
+$("#rs-back").addEventListener("click", () => rSheet.close());
 
 // Rövid technikai részlet a hibaüzenet végére, hogy a hiba oka visszakereshető legyen
 function errDetail(err) {
