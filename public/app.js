@@ -41,9 +41,15 @@ const faceIdx = (n) => { let h = 0; for (const c of String(n)) h = (h * 31 + c.c
 const face = (n, cls = "") => `<span class="face f${faceIdx(n)} ${cls}" title="${esc(n)}">${esc(initials(n))}</span>`;
 
 let toastTimer;
-function toast(msg, action) {
+// kind: "ok" (zöld pipa), "info" (sárga), "error" (piros); ha nincs megadva, a szövegből kitalálja
+function toast(msg, action, kind) {
   const t = $("#toast");
-  t.innerHTML = `<span>${esc(msg)}</span>${action ? `<button type="button">${esc(action.label)}</button>` : ""}`;
+  kind ||= /^(nem sikerült|ezt nem értettem|hiba|a mikrofon|nem találom|a diktáláshoz|ez a böngésző)/i.test(msg) ? "error"
+    : /^(felírtam|kedvenc lett|mentve|link kimásolva|jó étvágyat|\d+ hozzávaló|\d+ tétel törölve|rendben)/i.test(msg) ? "ok" : "info";
+  const icon = kind === "ok" ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>`
+    : kind === "error" ? "!" : "i";
+  t.className = `toast ${kind}`;
+  t.innerHTML = `<span class="ticon" aria-hidden="true">${icon}</span><span>${esc(msg)}</span>${action ? `<button type="button">${esc(action.label)}</button>` : ""}`;
   if (action) t.querySelector("button").onclick = () => { t.hidden = true; action.run(); };
   t.hidden = false;
   clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), action ? 5000 : 2600);
