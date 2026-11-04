@@ -8,6 +8,17 @@ service cloud.firestore {
         && request.auth.uid in get(/databases/$(database)/documents/lists/$(listId)).data.members;
     }
 
+    // Közös receptadatbázis (Street Kitchen / Mindmegette találatok): bárki olvashatja, aki belépett;
+    // írni csak a szerverfüggvény tud (az Admin SDK megkerüli a szabályokat)
+    match /recipes/{recipeId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+    match /recipeQueries/{queryId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
     match /lists/{listId} {
       // Csak a tagok látják a listát
       allow read: if signedIn() && request.auth.uid in resource.data.members;

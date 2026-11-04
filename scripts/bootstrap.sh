@@ -116,3 +116,46 @@ done
 
 
 
+
+echo "== Fizetési csomag (Blaze) ellenőrzése"
+gcloud services enable cloudbilling.googleapis.com --project "$P" >/dev/null 2>&1 || true
+TOKEN="$(gcloud auth print-access-token)"
+BILLING="$(curl -sS -H "Authorization: Bearer $TOKEN" -H "x-goog-user-project: $P" "https://cloudbilling.googleapis.com/v1/projects/$P/billingInfo" | jq -r '.billingEnabled // false')"
+echo "VAIS billing=$BILLING"
+echo "billing=$BILLING" >> "${GITHUB_OUTPUT:-/dev/null}"
+
+if [ "$BILLING" = "true" ]; then
+  echo "== Szerverfüggvényhez és Google-oldalkeresőhöz szükséges API-k"
+  gcloud services enable cloudfunctions.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com run.googleapis.com \
+    eventarc.googleapis.com pubsub.googleapis.com discoveryengine.googleapis.com --project "$P" \
+    || warn "Nem minden API-t sikerült bekapcsolni a szerverfüggvényhez."
+
+  echo "== Google oldalkereső (Vertex AI Search): csak streetkitchen.hu és mindmegette.hu"
+  DE="https://discoveryengine.googleapis.com/v1/projects/$P/locations/global/collections/default_collection"
+  H=(-H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -H "x-goog-user-project: $P")
+  code=$(curl -sS -o /tmp/ds.json -w "%{http_code}" "${H[@]}" "$DE/dataStores/recipe-sites")
+  if [ "$code" != "200" ]; then
+    code=$(curl -sS -o /tmp/ds.json -w "%{http_code}" -X POST "${H[@]}" "$DE/dataStores?dataStoreId=recipe-sites" \
+      -d '{"displayName":"Recept oldalak","industryVertical":"GENERIC","solutionTypes":["SOLUTION_TYPE_SEARCH"],"contentConfig":"PUBLIC_WEBSITE"}')
+    echo "VAIS datastore create http=$code $(jq -c '.error.message // .name // .' /tmp/ds.json | cut -c1-300)"
+    sleep 20
+    code=$(curl -sS -o /tmp/ts.json -w "%{http_code}" -X POST "${H[@]}" "$DE/dataStores/recipe-sites/siteSearchEngine/targetSites:batchCreate" \
+      -d '{"requests":[{"targetSite":{"providedUriPattern":"streetkitchen.hu/*","type":"INCLUDE","exactMatch":false}},{"targetSite":{"providedUriPattern":"www.mindmegette.hu/*","type":"INCLUDE","exactMatch":false}},{"targetSite":{"providedUriPattern":"mindmegette.hu/*","type":"INCLUDE","exactMatch":false}}]}')
+    echo "VAIS sites http=$code $(jq -c '.error.message // .name // .' /tmp/ts.json | cut -c1-300)"
+  else
+    echo "VAIS datastore már létezik"
+  fi
+  code=$(curl -sS -o /tmp/en.json -w "%{http_code}" "${H[@]}" "$DE/engines/recipe-search")
+  if [ "$code" != "200" ]; then
+    code=$(curl -sS -o /tmp/en.json -w "%{http_code}" -X POST "${H[@]}" "$DE/engines?engineId=recipe-search" \
+      -d '{"displayName":"Receptkereső","dataStoreIds":["recipe-sites"],"solutionType":"SOLUTION_TYPE_SEARCH","industryVertical":"GENERIC","searchEngineConfig":{"searchTier":"SEARCH_TIER_ENTERPRISE"}}')
+    echo "VAIS engine create http=$code $(jq -c '.error.message // .name // .' /tmp/en.json | cut -c1-300)"
+    sleep 15
+  else
+    echo "VAIS engine már létezik"
+  fi
+  # Próbakeresés közvetlenül (a szerverfüggvénytől függetlenül), hogy lássuk, adnak-e találatot a két oldalról
+  code=$(curl -sS -o /tmp/sq.json -w "%{http_code}" -X POST "${H[@]}" "$DE/engines/recipe-search/servingConfigs/default_search:search" \
+    -d '{"query":"csirke recept","pageSize":10,"languageCode":"hu"}')
+  echo "VAIS search http=$code n=$(jq '.results | length' /tmp/sq.json 2>/dev/null) $(jq -c '.error.message // ([.results[]?.document.derivedStructData | (.title + " | " + .link + " | img=" + ((.pagemap.cse_image[0].src // .pagemap.metatags[0]["og:image"] // "") | .[0:60]))] | .[0:5])' /tmp/sq.json 2>/dev/null | cut -c1-1200)"
+fi

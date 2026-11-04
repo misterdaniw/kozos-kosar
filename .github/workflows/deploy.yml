@@ -60,6 +60,16 @@ jobs:
         id: boot
         run: bash scripts/bootstrap.sh 2>&1 | tee bootstrap.log; exit ${PIPESTATUS[0]}
 
+      - name: Szerverfüggvény csomagjai
+        if: steps.boot.outputs.billing == 'true'
+        run: cd functions && npm ci --no-audit --no-fund
+
+      - name: Szerverfüggvény telepítése (csak Blaze csomaggal)
+        id: functions
+        if: steps.boot.outputs.billing == 'true'
+        continue-on-error: true
+        run: set -o pipefail; firebase deploy --only functions --force --project "${{ steps.boot.outputs.project_id }}" --non-interactive 2>&1 | tee functions.log
+
       - name: Feltöltés (Hosting + Firestore szabályok)
         id: deploy
         run: set -o pipefail; firebase deploy --only hosting,firestore:rules --project "${{ steps.boot.outputs.project_id }}" --non-interactive 2>&1 | tee deploy.log
@@ -82,11 +92,13 @@ jobs:
             echo "project: ${{ steps.boot.outputs.project_id }}"
             echo "url: https://${{ steps.boot.outputs.project_id }}.web.app"
             echo "time: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            echo "steps: secret=${{ steps.secret.outcome }} auth=${{ steps.auth.outcome }} cli=${{ steps.cli.outcome }} boot=${{ steps.boot.outcome }} deploy=${{ steps.deploy.outcome }}"
+            echo "steps: secret=${{ steps.secret.outcome }} auth=${{ steps.auth.outcome }} cli=${{ steps.cli.outcome }} boot=${{ steps.boot.outcome }} functions=${{ steps.functions.outcome }} deploy=${{ steps.deploy.outcome }}"
           } > status.txt
           cp "$GITHUB_WORKSPACE/secret-check.txt" . 2>/dev/null || true
           tail -60 "$GITHUB_WORKSPACE/bootstrap.log" > bootstrap-tail.txt 2>/dev/null || true
           grep "GEMINI_TEST" "$GITHUB_WORKSPACE/bootstrap.log" > gemini-test.txt 2>/dev/null || true
+          grep "VAIS" "$GITHUB_WORKSPACE/bootstrap.log" > vais.txt 2>/dev/null || true
+          grep -iE "error|hiba|denied|permission|failed|✔|deployed" "$GITHUB_WORKSPACE/functions.log" 2>/dev/null | tail -25 > functions.txt || true
           grep -iE "error|hiba|denied|permission|failed" "$GITHUB_WORKSPACE/deploy.log" 2>/dev/null | head -30 > deploy-errors.txt || true
           grep -E "::(warning|error)::|Error|hiba|Nem sikerült" "$GITHUB_WORKSPACE/bootstrap.log" 2>/dev/null | head -40 > notes.txt || true
           git init -q && git checkout -q -b deploy-status

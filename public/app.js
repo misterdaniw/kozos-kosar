@@ -127,6 +127,7 @@ function cleanSteps(steps) {
 }
 // A recept forrásának címkéje – mindig megjelenik a receptnél és a hozzávalóknál
 function sourceLabel(sugg) {
+  if (sugg?.source?.url && sugg.siteBased) return `${siteOf(sugg.source.url)} alapján`;
   if (sugg?.source?.url) return siteOf(sugg.source.url);
   if (sugg?.demo) return "Demó recept";
   return "Gemini (általános recept)";
@@ -284,6 +285,14 @@ async function createFirebaseBackend(cfg) {
   const listRef = (id) => fs.doc(db, "lists", id);
   const itemsRef = (id) => fs.collection(db, "lists", id, "items");
   const favsRef = (id) => fs.collection(db, "lists", id, "favorites");
+  // Közös receptadatbázis (a szerverfüggvény tölti a Street Kitchen / Mindmegette találatokkal)
+  let siteSearchFn = null;
+  async function getSiteSearch() {
+    if (siteSearchFn) return siteSearchFn;
+    const fx = await import(`${FIREBASE_CDN}/firebase-functions.js`);
+    siteSearchFn = fx.httpsCallable(fx.getFunctions(app, "europe-west1"), "searchRecipes", { timeout: 30000 });
+    return siteSearchFn;
+  }
   const cookRef = (id) => fs.collection(db, "lists", id, "cooking");
 
   let model = null, interpreter = null, urlModel = null, searchModel = null, ideasModel = null, listModel = null;
@@ -429,6 +438,19 @@ async function createFirebaseBackend(cfg) {
       return ref.id;
     },
     async removeFavorite(id, favId) { await fs.deleteDoc(fs.doc(favsRef(id), favId)); },
+    // Már megtalált receptek az adatbázisból (azonnal)
+    async cachedRecipes(query) {
+      const q = fs.query(fs.collection(db, "recipes"), fs.where("queries", "array-contains", norm(query)), fs.limit(80));
+      const snap = await fs.getDocs(q);
+      return snap.docs.map((d) => { const x = d.data(); return { title: x.title, url: x.url, site: x.site, image: x.image || "", description: x.description || "", minutes: x.minutes || 0, t: x.updatedAt?.toMillis?.() || 0 }; })
+        .sort((a, b) => b.t - a.t);
+    },
+    // Új keresés a két oldalon (Google oldalkereső a szerveren); az eredmény az adatbázisba is bekerül
+    async siteSearch(query, offset = 0) {
+      const fn = await getSiteSearch();
+      const res = await fn({ query: norm(query), offset });
+      return res.data;
+    },
     async searchRecipes(query, { exclude = [], glutenFree = false } = {}) {
       await getModel();
       const gf = glutenFree ? `\n${GLUTEN_RULE}` : "";
@@ -997,10 +1019,10 @@ updateSendBtn();
 
 /* AI javaslat lap */
 const aiSheet = $("#ai-sheet");
-async function runSuggest(prompt, { spoken = false, fromSearch = false, title = "", imageQuery = "" } = {}) {
+async function runSuggest(prompt, { spoken = false, fromSearch = false, title = "", imageQuery = "", siteRef = null } = {}) {
   const url = (prompt.match(/https?:\/\/\S+/) || [])[0] || null;
   const servings = parseServings(prompt);
-  state.recipe = { prompt: url ? prompt : (stripServings(prompt) || prompt), url, servings, spoken, fromSearch, knownTitle: title, imageQuery };
+  state.recipe = { prompt: url ? prompt : (stripServings(prompt) || prompt), url, servings, spoken, fromSearch, knownTitle: title, imageQuery, siteRef };
   $("#ai-back").hidden = !fromSearch;
   renderAiFav();
   state.suggestion = null;
@@ -1040,6 +1062,12 @@ async function fetchRecipe() {
   try {
     const res = await backend.suggest(R.prompt, openNames, { servings: R.servings, url: R.url, glutenFree: settings.glutenFree });
     if (!aiSheet.open || state.recipe !== R) return;
+    if (R.siteRef) { // a recept forrása a kiválasztott oldal marad
+      res.title = R.knownTitle || res.title;
+      res.source = { url: R.siteRef.url, site: R.siteRef.site, title: R.knownTitle || "" };
+      res.imageUrl = R.siteRef.image || res.imageUrl;
+      res.siteBased = true;
+    }
     state.suggestion = res;
     $("#ai-title").textContent = `${res.title || R.knownTitle || R.prompt}, ${R.servings} fő`;
     renderAiFav();
@@ -1047,7 +1075,8 @@ async function fetchRecipe() {
     // Forrás: mindig linkeljük az eredeti receptet
     const notes = [];
     if (res.source?.url) {
-      $("#ai-source").innerHTML = `Forrás: <a href="${esc(res.source.url)}" target="_blank" rel="noopener">${esc(res.source.site)}${res.source.title ? ` – ${esc(res.source.title)}` : ""}</a>`
+      $("#ai-source").innerHTML = `Forrás: <a href="${esc(res.source.url)}" target="_blank" rel="noopener">${esc(res.source.site)}${res.source.title ? ` – ${esc(res.source.title)}` : ""} ↗</a>`
+        + (res.siteBased ? `<br><small>Az oldal nem engedi a recept automatikus beolvasását, ezért a hozzávalókat és a lépéseket a Gemini állította össze a recept neve alapján. A pontos receptet a linken találod.</small>` : "")
         + (res.originalServings && res.originalServings !== R.servings ? `<br><small>Az eredeti recept ${res.originalServings} főre szól, ${R.servings} főre számoltam át.</small>` : "");
       $("#ai-source").hidden = false;
     } else {
@@ -1177,31 +1206,65 @@ function errDetail(err) {
   return `\n(Hibakód: ${m.replace(/\s+/g, " ").trim().slice(0, 160)})`;
 }
 
+// A keresőszó a gluténszűrővel együtt alkot egy kulcsot az adatbázisban
+const siteQuery = (q) => norm(q) + (settings.glutenFree ? " gluténmentes" : "");
+const markGf = (list) => list.forEach((x) => { x.gf = settings.glutenFree && (!x.url || /glutén/i.test(`${x.title} ${x.description}`)); });
+
 async function searchRecipes(query, { spoken = false } = {}) {
   const S = state.search;
   query = String(query).trim(); if (!query) return;
   if (/https?:\/\//.test(query)) { rSheet.close(); return runSuggest(query); }
-  Object.assign(S, { query, results: [], loading: true, tab: "search", meta: null, error: "", moreLoading: false, noMore: false, moreError: "" });
+  Object.assign(S, { query, results: [], loading: true, tab: "search", meta: null, error: "", moreLoading: false, noMore: false, moreError: "", bg: false, nextOffset: 0, mode: "" });
   renderRecipes();
+  const announce = (n) => { if (spoken && voice.wantOn) speak(n ? `${n} receptet találtam. Például: ${S.results.slice(0, 3).map((x) => x.title).join(", ")}. Melyik legyen?` : "Nem találtam receptet. Mondj valami mást!"); };
+
+  // 1) Street Kitchen / Mindmegette: azonnal az adatbázisból, közben a háttérben friss keresés
+  if (backend.siteSearch) {
+    const sq = siteQuery(query);
+    let cached = [];
+    try { cached = await backend.cachedRecipes(sq); } catch (e) { console.warn("adatbázis", e); }
+    if (S.query !== query) return;
+    if (cached.length) {
+      markGf(cached);
+      Object.assign(S, { results: cached, loading: false, bg: true, mode: "site", meta: { note: "" } });
+      renderRecipes(); announce(cached.length);
+    }
+    try {
+      const r = await backend.siteSearch(sq, 0);
+      if (S.query !== query) return;
+      const seen = new Set(S.results.map((x) => favKey(x)));
+      const fresh = (r.recipes || []).filter((x) => !seen.has(favKey(x)));
+      fresh.forEach((x) => { x.isNew = cached.length > 0; });
+      markGf(fresh);
+      Object.assign(S, { results: cached.length ? fresh.concat(S.results) : fresh, loading: false, bg: false, mode: "site", nextOffset: r.nextOffset || 10, noMore: !!r.exhausted && !fresh.length });
+      if (S.results.length) {
+        renderRecipes();
+        if (cached.length && fresh.length) toast(`${fresh.length} új recept érkezett a Street Kitchenről és a Mindmegettéről`, null, "ok");
+        if (!cached.length) announce(S.results.length);
+        return;
+      }
+    } catch (err) {
+      console.warn("Oldalkeresés nem elérhető", err);
+      if (S.query !== query) return;
+      if (S.results.length) { S.bg = false; renderRecipes(); return; } // az adatbázisból már van mit mutatni
+    }
+  }
+
+  // 2) Tartalék: a Gemini ételötletei (ha az oldalkeresés nem érhető el vagy nem talált semmit)
   try {
     const r = await backend.searchRecipes(query, { glutenFree: settings.glutenFree });
     (r.recipes || []).forEach((x) => { x.gf = settings.glutenFree; });
     if (S.query !== query) return;
-    Object.assign(S, { results: r.recipes || [], loading: false, meta: r });
-    if (!S.results.length) console.warn("Üres receptlista", r);
-    renderRecipes();
-    if (spoken && voice.wantOn) {
-      const n = S.results.length;
-      if (n) speak(`${n} receptet találtam. Például: ${S.results.slice(0, 3).map((x) => x.title).join(", ")}. Melyik legyen?`);
-      else speak("Nem találtam receptet. Mondj valami mást!");
-    }
+    Object.assign(S, { results: r.recipes || [], loading: false, bg: false, mode: "ideas", meta: r });
+    renderRecipes(); announce(S.results.length);
   } catch (err) {
     console.error(err);
     if (S.query !== query) return;
-    Object.assign(S, { loading: false, error: "Most nem sikerült keresni. Ellenőrizd az internetkapcsolatot, vagy keress közvetlenül az oldalakon." + errDetail(err) });
+    Object.assign(S, { loading: false, bg: false, error: "Most nem sikerült keresni. Ellenőrizd az internetkapcsolatot, vagy keress közvetlenül az oldalakon." + errDetail(err) });
     renderRecipes();
   }
 }
+
 // További receptek ugyanarra a keresésre (a már látottak kizárásával), a lista végére fűzve
 async function moreRecipes() {
   const S = state.search;
@@ -1210,15 +1273,21 @@ async function moreRecipes() {
   Object.assign(S, { moreLoading: true, moreError: "" });
   renderRecipes();
   try {
-    const r = await backend.searchRecipes(query, { exclude: S.results.map((x) => x.title), glutenFree: settings.glutenFree });
-    (r.recipes || []).forEach((x) => { x.gf = settings.glutenFree; });
+    let incoming = [], exhausted = false;
+    if (S.mode === "site" && backend.siteSearch) {
+      const r = await backend.siteSearch(siteQuery(query), S.nextOffset || 10);
+      incoming = r.recipes || []; exhausted = !!r.exhausted; S.nextOffset = r.nextOffset;
+      markGf(incoming);
+    } else {
+      const r = await backend.searchRecipes(query, { exclude: S.results.map((x) => x.title), glutenFree: settings.glutenFree });
+      incoming = r.recipes || []; incoming.forEach((x) => { x.gf = settings.glutenFree; });
+    }
     if (S.query !== query) return;
     const seen = new Set(S.results.map((x) => favKey(x)));
-    const fresh = (r.recipes || []).filter((x) => x.title && !seen.has(favKey(x)));
+    const fresh = incoming.filter((x) => x.title && !seen.has(favKey(x)));
     const firstNew = S.results.length;
     S.results = S.results.concat(fresh);
-    Object.assign(S, { moreLoading: false, noMore: fresh.length === 0 });
-    if (r.searchEntryPoint) S.meta = { ...(S.meta || {}), searchEntryPoint: r.searchEntryPoint };
+    Object.assign(S, { moreLoading: false, noMore: fresh.length === 0 && (exhausted || S.mode !== "site") });
     renderRecipes();
     // görgessünk az első új találathoz
     $("#rs-body").querySelectorAll(".rcard")[firstNew]?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1261,7 +1330,10 @@ function onSearchSpeech(txt) {
 function pickRecipe(r, { spoken = false } = {}) {
   rSheet.close();
   if (spoken && SR) startListening({ mode: "servings" }); // hanggal válaszolhatsz a „Hány főre?” kérdésre
-  runSuggest(r.url || r.title, { fromSearch: true, title: r.title, spoken, imageQuery: r.imageQuery || "" });
+  // A két oldal nem engedi a beolvasást, ezért a recept neve alapján a Gemini állítja össze a hozzávalókat,
+  // forrásként az eredeti recept (link, kép) marad
+  const siteRef = r.url && isRecipeSite(r.url) ? { url: r.url, site: r.site || siteOf(r.url), image: r.image || "" } : null;
+  runSuggest(siteRef ? r.title : (r.url || r.title), { fromSearch: true, title: r.title, spoken, imageQuery: r.imageQuery || "", siteRef });
 }
 
 // Ételfotók a találatokhoz: Wikipédia (memóriában és a telefonon gyorsítótárazva), addig rajzos kép
@@ -1303,7 +1375,7 @@ function recipeCard(r, i, src) {
       <img class="rimg" data-imgkey="${esc(imgKey)}" data-en="${esc(r.imageQuery || "")}" src="${esc(known || dishArt(r.title))}" alt="" loading="lazy" referrerpolicy="no-referrer"
         onerror="this.onerror=null;this.src='${dishArt(r.title).replace(/'/g, "%27")}'">
       <span class="rtext">
-        <span class="rchips"><span class="rsite ${siteCls}">${esc(site || "Ötlet")}</span>${r.gf ? `<span class="rsite gf">Glutén nélkül</span>` : ""}</span>
+        <span class="rchips">${r.isNew ? `<span class="rsite new">Új</span>` : ""}<span class="rsite ${siteCls}">${esc(site || "Ötlet")}</span>${r.gf ? `<span class="rsite gf">Glutén nélkül</span>` : ""}</span>
         <strong>${esc(r.title)}</strong>
         ${r.description ? `<span class="rdesc">${esc(r.description)}</span>` : ""}
         ${meta ? `<span class="rmeta">${esc(meta)}</span>` : ""}
@@ -1341,7 +1413,8 @@ function renderRecipes() {
     const m = S.meta || {};
     if (S.error) html += `<p class="note">${esc(S.error)}</p>`;
     if (m.note) html += `<p class="note">${esc(m.note)}</p>`;
-    if (m.ideas && S.results.length) html += `<p class="rhint">Ötletek a Gemini-től. Koppints egyre, és összeállítom a hozzávalókat, vagy a nyíllal keresd meg a Street Kitchenen és a Mindmegettén.</p>`;
+    if (S.bg) html += `<div class="loading bg-search"><div class="bounce" aria-hidden="true"><i></i><i></i><i></i></div><span>Már megtalált receptek. Közben keresek újakat a Street Kitchenen és a Mindmegettén…</span></div>`;
+    if (S.mode === "ideas" && S.results.length) html += `<p class="rhint">A Street Kitchen és a Mindmegette keresője most nem érhető el, ezért ezek a Gemini ételötletei. Koppints egyre, és összeállítom a hozzávalókat.</p>`;
     if (S.results.length) html += `<ul class="rlist">${S.results.map((r, i) => recipeCard(r, i, "search")).join("")}</ul>`;
     if (S.results.length) {
       html += S.moreLoading
@@ -1436,7 +1509,7 @@ $("#tab-shop").addEventListener("click", () => setTab("shop"));
 $("#tab-cook").addEventListener("click", () => setTab("cook"));
 
 function sourceChip(site, url) {
-  const cls = site === "Street Kitchen" ? "sk" : site === "Mindmegette" ? "mm" : "idea";
+  const cls = /^Street Kitchen/.test(site || "") ? "sk" : /^Mindmegette/.test(site || "") ? "mm" : "idea";
   const label = esc(site || "Ismeretlen forrás");
   return url && /^https:\/\//.test(url)
     ? `<a class="rsite ${cls}" href="${esc(url)}" target="_blank" rel="noopener">${label} ↗</a>`
