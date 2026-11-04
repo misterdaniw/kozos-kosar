@@ -116,15 +116,3 @@ done
 
 
 
-echo "== Képkeresés próba az app logikájával (ideiglenes)"
-node - <<'NODE' 2>&1 | sed 's/^/IMG_TEST /'
-const fs = require("fs");
-const src = fs.readFileSync("public/app.js", "utf8");
-const chunk = src.slice(src.indexOf("const stems = (t)"), src.indexOf("async function findWikiImage"));
-const norm = (s) => String(s || "").toLowerCase().trim().replace(/\s+/g, " ");
-const _fetch = global.fetch;
-global.fetch = (u) => _fetch(u, { headers: { "User-Agent": "KozosKosar/1.0 (https://github.com/misterdaniw/kozos-kosar)" } });
-const run = new Function("norm", chunk + "; return findDishImage;")(norm);
-const list = [["Paprikás csirke nokedlivel","chicken paprikash"],["Rántott csirke","breaded fried chicken"],["Mézes-mustáros csirkecomb","honey mustard chicken"],["Csirkés-brokkolis tészta","chicken broccoli pasta"],["Csirkepörkölt","chicken paprikash"],["Gulyásleves","goulash soup"],["Rakott krumpli","rakott krumpli"],["Túrós csusza","turos csusza"],["Tejszínes-gombás csirkemell","creamy mushroom chicken breast"],["Sült lazac citromos rizzsel","baked salmon with lemon rice"],["Csirkés quesadilla","chicken quesadilla"],["Brokkolikrémleves","broccoli cream soup"]];
-(async () => { for (const [t, e] of list) { const r = await run(t, e); console.log(`${t} -> ${r.image ? r.imageCredit + " | " + decodeURIComponent(r.image.split("/").pop()).slice(0, 70) : JSON.stringify(r)}`); } })();
-NODE
