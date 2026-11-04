@@ -115,3 +115,30 @@ for MODEL in $MODELS; do
 done
 
 
+
+echo "== Képkeresés próba (ideiglenes)"
+UA="KozosKosar/1.0 (https://github.com/misterdaniw/kozos-kosar)"
+wiki() { # $1 lang, $2 query  -> a jelenlegi app-logika
+  curl -sS -A "$UA" --get "https://$1.wikipedia.org/w/api.php" --data-urlencode "action=query" --data-urlencode "format=json" \
+    --data-urlencode "generator=search" --data-urlencode "gsrlimit=5" --data-urlencode "gsrsearch=$2" --data-urlencode "prop=pageimages" \
+    --data-urlencode "piprop=thumbnail" --data-urlencode "pithumbsize=800" --data-urlencode "pilicense=free" \
+  | jq -r '[.query.pages // {} | to_entries[] | .value] | sort_by(.index) | map(select(.thumbnail.source and ((.thumbnail.source|test("\\.svg";"i"))|not))) | (.[0] | if . then "\(.title) -> \(.thumbnail.source | .[0:90])" else "NINCS" end)'
+}
+commons() { # $1 query -> Wikimedia Commons fájlkeresés
+  curl -sS -A "$UA" --get "https://commons.wikimedia.org/w/api.php" --data-urlencode "action=query" --data-urlencode "format=json" \
+    --data-urlencode "generator=search" --data-urlencode "gsrnamespace=6" --data-urlencode "gsrlimit=8" --data-urlencode "gsrsearch=$1 filetype:bitmap" \
+    --data-urlencode "prop=imageinfo" --data-urlencode "iiprop=url|mime" --data-urlencode "iiurlwidth=600" \
+  | jq -r '[.query.pages // {} | to_entries[] | .value] | sort_by(.index) | map(select(.imageinfo[0].mime|test("jpeg|png|webp"))) | (.[0] | if . then "\(.title|.[0:60]) -> \(.imageinfo[0].thumburl|.[0:80])" else "NINCS" end)'
+}
+while IFS='|' read -r HU EN; do
+  echo "IMG_TEST [$HU] hu=$(wiki hu "$HU") || en=$(wiki en "$HU") || commons_hu=$(commons "$HU") || commons_en=$(commons "$EN")"
+done <<'LIST'
+Paprikás csirke nokedlivel|chicken paprikash
+Rántott csirke|breaded fried chicken
+Mézes-mustáros csirkecomb|honey mustard chicken thighs
+Csirkés-brokkolis tészta|chicken broccoli pasta
+Csirkepörkölt|chicken stew paprika
+Gulyásleves|goulash soup
+Rakott krumpli|layered potato casserole
+Túrós csusza|turos csusza
+LIST
