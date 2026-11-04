@@ -223,6 +223,10 @@ function createDemoBackend() {
     async updateCooking(id, cid, patch) { await mutate(id, (d) => { const c = (d.cooking || []).find((x) => x.id === cid); if (c) Object.assign(c, patch); }); },
     async addFavorite(id, fav) { const fid = rid(); await mutate(id, (d) => { (d.favorites ||= []).push({ id: fid, createdAt: Date.now(), ...fav }); }); return fid; },
     async removeFavorite(id, favId) { await mutate(id, (d) => { d.favorites = (d.favorites || []).filter((f) => f.id !== favId); }); },
+    async recipeSteps(title) {
+      await new Promise((r) => setTimeout(r, 300));
+      return ["Készítsd elő a hozzávalókat: mosd meg, pucold meg és vágd fel, amit kell.", `Kezdd el a(z) ${title} alapját: a hagymát vagy az alapanyagokat párold, pirítsd elő.`, "Add hozzá a többi hozzávalót, fűszerezd, és főzd vagy süsd készre.", "Kóstold meg, igazíts az ízén, és tálald."].map((text) => ({ text }));
+    },
     async searchRecipes(query, { exclude = [], glutenFree = false } = {}) {
       await new Promise((r) => setTimeout(r, 500));
       const words = norm(query).split(/\s+/).filter((w) => w.length > 2).map((w) => w.slice(0, 5));
@@ -515,6 +519,13 @@ async function createFirebaseBackend(cfg) {
       const gfx = glutenFree ? `\nGluténmentes változatot kérünk: a búzát, árpát, rozsot tartalmazó hozzávalók helyett gluténmentes alternatívát adj (pl. gluténmentes lisztkeverék, rizsliszt, gluténmentes tészta), és az ilyen hozzávaló nevében szerepeljen a „gluténmentes” szó.` : "";
       const res = await m.generateContent(`Kérés: ${prompt}\nLétszám: ${servings} fő${ctx}${gfx}`);
       return tidy(JSON.parse(res.response.text()), { generic: true });
+    },
+    // Ha egy receptnél nincsenek lépések, utólag elkészítjük őket a cím és a hozzávalók alapján
+    async recipeSteps(title, ingredients = [], servings = 4) {
+      const m = await getModel();
+      const ing = ingredients.map((x) => `${x.name}${x.qty ? ` (${x.qty})` : ""}`).join(", ");
+      const res = await m.generateContent(`Kérés: ${title}\nLétszám: ${servings} fő\nHozzávalók: ${ing}\nAdd meg az elkészítés lépéseit (steps) ezekből a hozzávalókból.`);
+      return cleanSteps(parseJsonLoose(res.response.text()).steps);
     },
     async interpret(text, openQuestions, existingNames) {
       await getModel();
@@ -1206,10 +1217,22 @@ function buildCookEntry(s) {
     steps: (s.steps || []).slice(0, 20), by: me.name,
   };
 }
-$("#ai-view").addEventListener("click", () => {
+$("#ai-view").addEventListener("click", async () => {
   const s = state.suggestion; if (!s) return;
+  const btn = $("#ai-view");
   const r = { id: "preview", ...buildCookEntry(s) };
-  if (!r.steps.length) { openCookSheet(r, { preview: true }); toast("Ehhez a recepthez nincsenek lépések, csak a hozzávalók.", null, "info"); return; }
+  if (!r.steps.length) { // nincsenek lépések: most elkészíttetjük őket
+    const label = btn.textContent;
+    btn.disabled = true; btn.textContent = "Lépések készítése…";
+    try { s.steps = await backend.recipeSteps(r.title, r.ingredients, r.servings); r.steps = s.steps.slice(0, 20); }
+    catch (err) { console.error(err); }
+    btn.disabled = false; btn.textContent = label;
+    if (!aiSheet.open || state.suggestion !== s) return;
+  }
+  if (!r.steps.length) { aiSheet.close(); openCookSheet(r, { preview: true }); toast("Most nem sikerült elkészíteni a lépéseket, csak a hozzávalókat mutatom.", null, "info"); return; }
+  // a hozzávaló-lapot bezárjuk, a lépések után visszahozzuk
+  step.returnToAi = true;
+  aiSheet.close();
   openSteps(r, { preview: true, fresh: true });
   // ha nincs saját fotó, keresünk egyet (Wikipédia / Commons), és megjelenítjük
   if (!r.image) findDishImage(r.title, r.imageQuery).then((f) => { if (f.image && step.r === r) { r.image = f.image; r.imageCredit = f.imageCredit; renderStep(); } });
@@ -1489,17 +1512,16 @@ function renderRecipes() {
 }
 $("#rs-tab-search").addEventListener("click", () => { state.search.tab = "search"; renderRecipes(); });
 $("#rs-tab-favs").addEventListener("click", () => { state.search.tab = "favs"; renderRecipes(); });
-function renderGf() {
-  $("#rs-gf").setAttribute("aria-pressed", String(settings.glutenFree));
-  $("#rs-gf").classList.toggle("on", settings.glutenFree);
-}
-$("#rs-gf").addEventListener("click", () => {
-  settings.glutenFree = !settings.glutenFree; LS.set("kk:glutenFree", settings.glutenFree);
+function renderGf() { $("#rs-gf-note").hidden = !settings.glutenFree; }
+// A „Glutén nélkül” kapcsoló a Beállításokban van; azonnal érvényes
+$("#set-gf").addEventListener("change", () => {
+  settings.glutenFree = $("#set-gf").checked; LS.set("kk:glutenFree", settings.glutenFree);
   renderGf();
   toast(settings.glutenFree ? "Glutén nélkül: csak búza, árpa és rozs nélküli recepteket mutatok." : "A glutén szűrő kikapcsolva.", null, "info");
   const S = state.search;
   if (S.query && S.tab === "search") searchRecipes(S.query); // újrakeresés a szűrővel
 });
+$("#rs-gf-open").addEventListener("click", () => openListSheet());
 renderGf();
 $("#rs-body").addEventListener("click", (e) => {
   if (e.target.closest("#rs-more")) return moreRecipes();
@@ -1576,18 +1598,19 @@ function goTab(dir) {
 }
 (() => {
   let sx = 0, sy = 0, dx = 0, tracking = false, horizontal = null;
-  const blocked = (el) => el.closest("input, textarea, .chips, .qopts, .rs-filters, dialog, .composer, .main-tabs");
-  mainEl.addEventListener("touchstart", (e) => {
+  const scrollsSideways = (el) => { const s = el.closest(".chips, .qopts"); return s && s.scrollWidth > s.clientWidth + 2; };
+  const blocked = (el) => !el.closest || el.closest("input, textarea, dialog, .composer, .main-tabs, header") || scrollsSideways(el) || document.querySelector("dialog[open]");
+  document.addEventListener("touchstart", (e) => {
     const t = e.touches[0];
     // a képernyő szélén indított húzás a rendszer „vissza” mozdulata, azt nem zavarjuk
-    if (e.touches.length !== 1 || blocked(e.target) || t.clientX < 24 || t.clientX > innerWidth - 24) { tracking = false; return; }
+    if (e.touches.length !== 1 || blocked(e.target) || t.clientX < 16 || t.clientX > innerWidth - 16) { tracking = false; return; }
     sx = t.clientX; sy = t.clientY; dx = 0; tracking = true; horizontal = null;
   }, { passive: true });
-  mainEl.addEventListener("touchmove", (e) => {
+  document.addEventListener("touchmove", (e) => {
     if (!tracking) return;
     const t = e.touches[0];
     dx = t.clientX - sx; const dy = t.clientY - sy;
-    if (horizontal === null && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) horizontal = Math.abs(dx) > Math.abs(dy) * 1.3;
+    if (horizontal === null && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) horizontal = Math.abs(dx) > Math.abs(dy) * 1.2;
     if (!horizontal) return;
     const i = TABS.indexOf(state.tab);
     const edge = (dx > 0 && i === 0) || (dx < 0 && i === TABS.length - 1);
@@ -1598,10 +1621,10 @@ function goTab(dir) {
     if (!tracking) return;
     tracking = false;
     mainEl.style.transition = ""; mainEl.style.transform = "";
-    if (horizontal && Math.abs(dx) > 70) goTab(dx < 0 ? 1 : -1);
+    if (horizontal && Math.abs(dx) > 60) goTab(dx < 0 ? 1 : -1);
   };
-  mainEl.addEventListener("touchend", end, { passive: true });
-  mainEl.addEventListener("touchcancel", end, { passive: true });
+  document.addEventListener("touchend", end, { passive: true });
+  document.addEventListener("touchcancel", end, { passive: true });
 })();
 
 // Az első néhány induláskor a képernyő finoman megmozdul, hogy látszódjon: oldalra is lehet húzni
@@ -1811,7 +1834,8 @@ function renderStep() {
 function goStep(d) {
   const n = step.r.steps.length;
   if (d > 0 && step.i === n - 1) {
-    const r = step.r; closeSteps();
+    const r = step.r; const back = step.preview && step.returnToAi; closeSteps();
+    if (back) return; // vissza a hozzávalókhoz: onnan „Hozzáadás”-sal mehet a listára és a Főzés fülre
     if (step.preview) {
       const { id, ...entry } = r;
       toast("Ez volt az utolsó lépés. Elteszed a receptet a Főzés fülre?", { label: "Mentés", run: async () => { const cid = await backend.addCooking(state.listId, entry); if (!entry.image) ensureCookImage({ id: cid, ...entry }); toast(`„${entry.title}” a Főzés fülre került`, null, "ok"); } }, "info");
@@ -1823,7 +1847,11 @@ function goStep(d) {
   if (step.voice) speak(`${step.i + 1}. lépés. ${step.r.steps[step.i].text}`);
 }
 function closeSteps() { if (stepSheet.open) stepSheet.close(); }
-stepSheet.addEventListener("close", () => { keepAwake(false); if (step.voice) { step.voice = false; stopListening(); } });
+stepSheet.addEventListener("close", () => {
+  keepAwake(false); if (step.voice) { step.voice = false; stopListening(); }
+  // „Recept megnézése” után vissza a hozzávalókhoz, hogy hozzá lehessen adni őket a listához
+  if (step.returnToAi) { step.returnToAi = false; if (state.suggestion && !aiSheet.open) aiSheet.showModal(); }
+});
 $("#step-prev").addEventListener("click", () => goStep(-1));
 $("#step-next").addEventListener("click", () => goStep(1));
 $("#step-close").addEventListener("click", closeSteps);
@@ -1851,7 +1879,7 @@ function openListSheet() {
   $("#rename").value = state.list?.name || "";
   $("#myname").value = me.name;
   $("#native-share").hidden = !navigator.share;
-  $("#set-auto").checked = settings.autoListen; $("#set-speak").checked = settings.speak;
+  $("#set-auto").checked = settings.autoListen; $("#set-speak").checked = settings.speak; $("#set-gf").checked = settings.glutenFree;
   $("#voice-settings").hidden = !SR;
   $("#members").innerHTML = Object.entries(state.list?.members || {}).map(([uid, n]) =>
     `<li>${face(n, "big")}<span>${esc(n)}${uid === me.uid ? " <em>(te)</em>" : ""}</span></li>`).join("");

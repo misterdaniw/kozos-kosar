@@ -414,7 +414,8 @@ dialog.sheet.tall .sheet-body { height: 100%; grid-template-rows: auto auto auto
 #rs-body { overflow: visible !important; }
 .rs-bar { margin-top: 4px; }
 /* Glutén nélkül szűrő */
-.rs-filters { display: flex; gap: 8px; flex-wrap: wrap; }
+.rs-gf-note { margin: 0; font-size: 13px; color: var(--muted); }
+.linkish { background: none; border: 0; padding: 0; color: var(--brand); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
 .gf-toggle {
   display: inline-flex; align-items: center; gap: 8px; border: 2px solid var(--line); background: var(--surface); color: var(--ink);
   border-radius: 99px; padding: 8px 12px 8px 10px; font: 600 15px/1 var(--f-display); box-shadow: var(--shadow);
@@ -610,7 +611,8 @@ dialog.step-mode::backdrop { background: var(--bg); }
 .update-bar button { border: 0; border-radius: 99px; padding: 8px 16px; background: var(--ink); color: var(--bg); font: 600 14.5px/1 var(--f-display); }
 
 /* Fülváltás húzással: követi az ujjat, az új fül a húzás irányából csúszik be */
-main { transition: transform .22s ease-out; touch-action: pan-y; }
+main { transition: transform .22s ease-out; touch-action: pan-y; min-height: 70vh; }
+html, body { overscroll-behavior-x: none; }
 main.slide-from-right { animation: slideFromRight .26s ease-out; }
 main.slide-from-left { animation: slideFromLeft .26s ease-out; }
 @keyframes slideFromRight { from { transform: translateX(40px); opacity: .4; } }
@@ -694,12 +696,7 @@ body { overflow-x: hidden; }
       <button type="button" role="tab" id="rs-tab-search" aria-selected="true">Keresés</button>
       <button type="button" role="tab" id="rs-tab-favs" aria-selected="false">Kedvencek</button>
     </div>
-    <div class="rs-filters">
-      <button type="button" class="gf-toggle" id="rs-gf" aria-pressed="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21V9"/><path d="M12 13c-2.5 0-4-1.5-4-4 2.5 0 4 1.5 4 4Zm0 0c2.5 0 4-1.5 4-4-2.5 0-4 1.5-4 4Zm0-4c-2 0-3.2-1.2-3.2-3.2C10.8 5.8 12 7 12 9Zm0 0c2 0 3.2-1.2 3.2-3.2C13.2 5.8 12 7 12 9Z"/><path d="M4 4l16 16"/></svg>
-        <span>Glutén nélkül</span><b class="gf-state" aria-hidden="true"></b>
-      </button>
-    </div>
+    <p class="rs-gf-note" id="rs-gf-note" hidden>🌾 Glutén nélkül szűrő bekapcsolva <button type="button" class="linkish" id="rs-gf-open">módosítás</button></p>
     <div id="rs-body" aria-live="polite"></div>
     <div id="rs-gsearch" hidden></div>
     </section>
@@ -804,6 +801,9 @@ body { overflow-x: hidden; }
     <div class="toggles" id="voice-settings">
       <label class="toggle"><input type="checkbox" id="set-auto"><span><b>Megnyitáskor rögtön hallgasson</b><small>Az app indulásakor azonnal diktálhatsz.</small></span></label>
       <label class="toggle"><input type="checkbox" id="set-speak"><span><b>Kérdések felolvasása</b><small>Ha valamit nem ért, hangosan visszakérdez.</small></span></label>
+    </div>
+    <div class="toggles">
+      <label class="toggle"><input type="checkbox" id="set-gf"><span><b>Glutén nélkül</b><small>Csak búza, árpa és rozs nélküli recepteket mutat, és a hozzávalóknál jelzi a glutént.</small></span></label>
     </div>
     <div class="row">
       <button class="btn danger" type="button" id="leave">Kilépés a listából</button>
