@@ -669,6 +669,7 @@ function openList(id) {
     (cook) => { state.cooking = cook; renderCooking(); saveSnapshot(); });
   // Alapból hanggal: megnyitáskor rögtön elindul a hallgatás (ha a böngésző engedi)
   if (state.pendingShare) { const sh = state.pendingShare; state.pendingShare = null; state.autoTried = true; setTimeout(() => runSuggest(sh), 400); }
+  if (!state.hinted) { state.hinted = true; swipeHint(); }
   if (settings.autoListen && SR && !state.autoTried && !window.KK_DEMO_ONLY) { state.autoTried = true; setTimeout(() => startListening({ auto: true }), 600); }
 }
 
@@ -1558,6 +1559,62 @@ function setTab(tab) {
 $("#tab-shop").addEventListener("click", () => setTab("shop"));
 $("#tab-recipes").addEventListener("click", () => openRecipes());
 $("#tab-cook").addEventListener("click", () => setTab("cook"));
+
+/* ---------- Váltás a fülek között jobbra-balra húzással ---------- */
+const TABS = ["shop", "recipes", "cook"];
+const mainEl = $("main");
+function goTab(dir) {
+  const i = TABS.indexOf(state.tab) + dir;
+  if (i < 0 || i >= TABS.length) return false;
+  const next = TABS[i];
+  if (next === "recipes") openRecipes(); else setTab(next);
+  // becsúszik az új fül a húzás irányából
+  mainEl.classList.remove("slide-from-left", "slide-from-right");
+  void mainEl.offsetWidth;
+  mainEl.classList.add(dir > 0 ? "slide-from-right" : "slide-from-left");
+  return true;
+}
+(() => {
+  let sx = 0, sy = 0, dx = 0, tracking = false, horizontal = null;
+  const blocked = (el) => el.closest("input, textarea, .chips, .qopts, .rs-filters, dialog, .composer, .main-tabs");
+  mainEl.addEventListener("touchstart", (e) => {
+    const t = e.touches[0];
+    // a képernyő szélén indított húzás a rendszer „vissza” mozdulata, azt nem zavarjuk
+    if (e.touches.length !== 1 || blocked(e.target) || t.clientX < 24 || t.clientX > innerWidth - 24) { tracking = false; return; }
+    sx = t.clientX; sy = t.clientY; dx = 0; tracking = true; horizontal = null;
+  }, { passive: true });
+  mainEl.addEventListener("touchmove", (e) => {
+    if (!tracking) return;
+    const t = e.touches[0];
+    dx = t.clientX - sx; const dy = t.clientY - sy;
+    if (horizontal === null && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) horizontal = Math.abs(dx) > Math.abs(dy) * 1.3;
+    if (!horizontal) return;
+    const i = TABS.indexOf(state.tab);
+    const edge = (dx > 0 && i === 0) || (dx < 0 && i === TABS.length - 1);
+    mainEl.style.transition = "none";
+    mainEl.style.transform = `translateX(${dx * (edge ? 0.15 : 0.45)}px)`; // a széleken csak „rugózik”
+  }, { passive: true });
+  const end = () => {
+    if (!tracking) return;
+    tracking = false;
+    mainEl.style.transition = ""; mainEl.style.transform = "";
+    if (horizontal && Math.abs(dx) > 70) goTab(dx < 0 ? 1 : -1);
+  };
+  mainEl.addEventListener("touchend", end, { passive: true });
+  mainEl.addEventListener("touchcancel", end, { passive: true });
+})();
+
+// Az első néhány induláskor a képernyő finoman megmozdul, hogy látszódjon: oldalra is lehet húzni
+function swipeHint() {
+  const n = LS.get("kk:swipeHint", 0);
+  if (n >= 3 || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  LS.set("kk:swipeHint", n + 1);
+  setTimeout(() => {
+    mainEl.classList.add("swipe-hint");
+    mainEl.addEventListener("animationend", () => mainEl.classList.remove("swipe-hint"), { once: true });
+    if (n === 0) toast("Tipp: húzd jobbra-balra a képernyőt a Lista, a Receptek és a Főzés közti váltáshoz.", null, "info");
+  }, 900);
+}
 
 function sourceChip(site, url) {
   const cls = /^Street Kitchen/.test(site || "") ? "sk" : /^Mindmegette/.test(site || "") ? "mm" : "idea";

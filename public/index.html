@@ -609,6 +609,23 @@ dialog.step-mode::backdrop { background: var(--bg); }
 }
 .update-bar button { border: 0; border-radius: 99px; padding: 8px 16px; background: var(--ink); color: var(--bg); font: 600 14.5px/1 var(--f-display); }
 
+/* Fülváltás húzással: követi az ujjat, az új fül a húzás irányából csúszik be */
+main { transition: transform .22s ease-out; touch-action: pan-y; }
+main.slide-from-right { animation: slideFromRight .26s ease-out; }
+main.slide-from-left { animation: slideFromLeft .26s ease-out; }
+@keyframes slideFromRight { from { transform: translateX(40px); opacity: .4; } }
+@keyframes slideFromLeft { from { transform: translateX(-40px); opacity: .4; } }
+/* Első induláskor: kis oldalirányú „rándulás”, hogy látszódjon, hogy oldalra is lehet húzni */
+main.swipe-hint { animation: swipeHint 1.4s ease-in-out; }
+@keyframes swipeHint {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-46px); }
+  45% { transform: translateX(0); }
+  65% { transform: translateX(-24px); }
+  85% { transform: translateX(0); }
+}
+body { overflow-x: hidden; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
