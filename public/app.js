@@ -90,12 +90,12 @@ Szabályok:
 - name: rövid, boltban szokásos név kisbetűvel. qty: az átszámolt mennyiség. category ezek egyike: ${CATS.join(" | ")}.
 - staple=true azokra, amik a legtöbb háztartásban általában otthon vannak (só, bors, olaj, cukor, liszt, alap fűszerek). Vizet ne adj vissza.
 - gluten=true minden hozzávalóra, amely búzát, árpát vagy rozsot tartalmaz (pl. liszt, zsemlemorzsa, tészta, kenyér, sör), különben false.
-- steps: az elkészítés lépései az oldal alapján, saját szavaiddal, tömören (legfeljebb 12 lépés, mindegyik 1-3 mondat), az eredeti sorrendben, a megadott létszámhoz igazítva. Ha egy lépéshez az oldalon saját kép tartozik, az image mezőbe írd a kép pontos (https) címét, különben hagyd üresen. Ne találj ki képcímet.
-- imageUrl: a recept fő képének pontos (https) címe, ha az oldalon szerepel, különben üres. minutes: a teljes elkészítési idő percben, ha kiderül, különben 0.
+- steps: az elkészítés lépései az oldal alapján, saját szavaiddal, tömören (legfeljebb 12 lépés, mindegyik 1-3 mondat), az eredeti sorrendben, a megadott létszámhoz igazítva. Lépésekhez ne adj képet.
+- imageUrl: az elkészült étel fő fotójának pontos (https) címe, ahogy az oldalon szerepel (pl. az og:image), különben üres. Ne találj ki képcímet. minutes: a teljes elkészítési idő percben, ha kiderül, különben 0.
 - Ha az oldal nem recept, vagy nem tudtad beolvasni, az items legyen üres, és a note mezőben írd le röviden, mi a gond.
 - Ha az étel neve nagyon különböző recepteket takarhat (pl. "süti", "valami vacsora"), az items legyen üres, és kérdezz vissza: question + 2-4 rövid options.
 Válaszolj kizárólag egyetlen JSON objektummal, más szöveg nélkül, ebben a formában:
-{"title": "Lecsó", "sourceUrl": "https://...", "sourceSite": "Street Kitchen", "originalServings": 4, "minutes": 40, "imageUrl": "https://...", "items": [{"name": "lecsópaprika", "qty": "1 kg", "category": "Zöldség, gyümölcs", "staple": false, "gluten": false}], "steps": [{"text": "A hagymát apróra vágjuk, és az olajon üvegesre pároljuk.", "image": ""}], "note": "", "question": "", "options": []}`;
+{"title": "Lecsó", "sourceUrl": "https://...", "sourceSite": "Street Kitchen", "originalServings": 4, "minutes": 40, "imageUrl": "https://...", "items": [{"name": "lecsópaprika", "qty": "1 kg", "category": "Zöldség, gyümölcs", "staple": false, "gluten": false}], "steps": [{"text": "A hagymát apróra vágjuk, és az olajon üvegesre pároljuk."}], "note": "", "question": "", "options": []}`;
 
 const RECIPE_SEARCH_PROMPT = `Egy magyar család receptkeresője vagy. A felhasználó megad egy alapanyagot, ételtípust vagy hangulatot (pl. "csirke", "gyors vacsora", "leves", "sütemény", "vega").
 Keress hozzá recepteket kizárólag a streetkitchen.hu és a mindmegette.hu oldalon (pl. "csirke recept site:streetkitchen.hu", "csirke recept site:mindmegette.hu"), mindkét oldalról vegyesen.
@@ -123,7 +123,7 @@ function siteOf(url) {
 const httpsUrl = (u) => (typeof u === "string" && /^https:\/\/[^\s"'<>]+$/.test(u.trim()) ? u.trim().slice(0, 600) : "");
 function cleanSteps(steps) {
   return (Array.isArray(steps) ? steps : []).map((x) => (typeof x === "string" ? { text: x } : x || {}))
-    .map((x) => ({ text: String(x.text || "").trim().slice(0, 700), image: httpsUrl(x.image) })).filter((x) => x.text).slice(0, 20);
+    .map((x) => ({ text: String(x.text || "").trim().slice(0, 700) })).filter((x) => x.text).slice(0, 20);
 }
 // A recept forrásának címkéje – mindig megjelenik a receptnél és a hozzávalóknál
 function sourceLabel(sugg) {
@@ -217,6 +217,7 @@ function createDemoBackend() {
     interpret: null, // demó módban csak a helyi értelmező fut
     async addCooking(id, r) { const cid = rid(); await mutate(id, (d) => { (d.cooking ||= []).push({ id: cid, createdAt: Date.now(), ...r }); }); return cid; },
     async removeCooking(id, cid) { await mutate(id, (d) => { d.cooking = (d.cooking || []).filter((c) => c.id !== cid); }); },
+    async updateCooking(id, cid, patch) { await mutate(id, (d) => { const c = (d.cooking || []).find((x) => x.id === cid); if (c) Object.assign(c, patch); }); },
     async addFavorite(id, fav) { const fid = rid(); await mutate(id, (d) => { (d.favorites ||= []).push({ id: fid, createdAt: Date.now(), ...fav }); }); return fid; },
     async removeFavorite(id, favId) { await mutate(id, (d) => { d.favorites = (d.favorites || []).filter((f) => f.id !== favId); }); },
     async searchRecipes(query, { exclude = [], glutenFree = false } = {}) {
@@ -242,7 +243,7 @@ function createDemoBackend() {
       }
       const merged = new Map();
       const f = servings / 4;
-      const steps = hits.flatMap((k) => (DEMO_STEPS[k] || []).map((text) => ({ text, image: "" })));
+      const steps = hits.flatMap((k) => (DEMO_STEPS[k] || []).map((text) => ({ text })));
       hits.forEach((k) => DEMO_RECIPES[k].forEach(([name, qty, c, staple]) => { if (!merged.has(name)) merged.set(name, { name, qty: scaleQty(qty, f), category: CATS[c], staple: !!staple, gluten: hasGluten(name) }); }));
       return { title: hits.map((h) => h[0].toUpperCase() + h.slice(1)).join(" + "), items: [...merged.values()], originalServings: 4, steps, demo: true, minutes: 0,
         note: "Demó recept. A beállított appban a Street Kitchen vagy a Mindmegette receptjéből dolgozik." };
@@ -420,6 +421,7 @@ async function createFirebaseBackend(cfg) {
       return ref.id;
     },
     async removeCooking(id, cid) { await fs.deleteDoc(fs.doc(cookRef(id), cid)); },
+    async updateCooking(id, cid, patch) { await fs.updateDoc(fs.doc(cookRef(id), cid), patch); },
     async addFavorite(id, fav) {
       const ref = fs.doc(favsRef(id));
       fs.setDoc(ref, { ...fav, createdAt: fs.serverTimestamp() }).catch((e) => { console.error(e); toast("Nem sikerült menteni a kedvencet."); });
@@ -1369,12 +1371,14 @@ $("#ai-add").addEventListener("click", async () => {
   try {
     await backend.addItems(state.listId, items);
     // A recept a Főzés fülre is felkerül (összes hozzávalóval és a lépésekkel)
-    await backend.addCooking(state.listId, {
+    const cookEntry = {
       title: source || "Recept", servings: state.recipe?.servings || 4, minutes: s.minutes || 0,
-      sourceSite: sourceLabel(s), sourceUrl, image: s.imageUrl || "",
+      sourceSite: sourceLabel(s), sourceUrl, image: s.imageUrl || "", imageCredit: s.imageUrl ? sourceLabel(s) : "",
       ingredients: s.items.slice(0, 60).map((it) => ({ name: String(it.name || "").slice(0, 100), qty: String(it.qty || "").slice(0, 30) })),
       steps: (s.steps || []).slice(0, 20), by: me.name,
-    });
+    };
+    const cid = await backend.addCooking(state.listId, cookEntry);
+    if (!cookEntry.image) ensureCookImage({ id: cid, ...cookEntry });
     aiSheet.close();
     toast(`${items.length} hozzávaló felkerült a listára, a recept pedig a Főzés fülre`, { label: "Megnézem", run: () => setTab("cook") });
   } catch (err) { console.error(err); toast("Nem sikerült hozzáadni. Próbáld újra."); $("#ai-add").disabled = false; }
@@ -1406,7 +1410,41 @@ function sourceChip(site, url) {
     ? `<a class="rsite ${cls}" href="${esc(url)}" target="_blank" rel="noopener">${label} ↗</a>`
     : `<span class="rsite ${cls}">${label}</span>`;
 }
-const recipeImg = (src, cls) => (src ? `<img class="${cls}" src="${esc(src)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : "");
+// Ételenként egy kép: a recept saját fotója → ha nincs, a Wikipédiáról → végső esetben egy színes rajz (Gemini nem rajzol)
+function dishArt(title) {
+  let h = 0; for (const c of String(title)) h = (h * 31 + c.charCodeAt(0)) % 360;
+  const a = `hsl(${h} 80% 62%)`, b = `hsl(${(h + 40) % 360} 85% 55%)`;
+  const svgSrc = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><rect width="160" height="120" fill="url(#g)"/><circle cx="80" cy="66" r="40" fill="#fff" opacity=".95"/><circle cx="80" cy="66" r="29" fill="${b}" opacity=".35"/><path d="M58 60c6-8 14-6 18 0s14 8 22 0" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round"/><circle cx="66" cy="74" r="5" fill="#fff"/><circle cx="92" cy="72" r="6" fill="#fff"/><path d="M128 30v40M122 30v14a6 6 0 0 0 12 0V30" stroke="#fff" stroke-width="4" fill="none" stroke-linecap="round"/><path d="M32 30v40M32 30c-6 4-6 16 0 20" stroke="#fff" stroke-width="4" fill="none" stroke-linecap="round"/></svg>`;
+  return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgSrc);
+}
+const dishSrc = (r) => r.image || dishArt(r.title || "");
+const recipeImg = (src, cls, fallbackTitle) => {
+  if (!src) return "";
+  const fb = fallbackTitle != null ? dishArt(fallbackTitle) : "";
+  return `<img class="${cls}" src="${esc(src)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="${fb ? `this.onerror=null;this.src='${fb.replace(/'/g, "%27")}'` : "this.remove()"}">`;
+};
+
+// Kép keresése a Wikipédián (magyar, majd angol), ha a receptnek nincs saját fotója
+async function findWikiImage(title) {
+  const q = String(title).replace(/,.*$/, "").replace(/\b(recept|házi|klasszikus|egyszerű|gyors)\b/gi, "").trim();
+  for (const lang of ["hu", "en"]) {
+    try {
+      const url = `https://${lang}.wikipedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrlimit=5&gsrsearch=${encodeURIComponent(q)}&prop=pageimages&piprop=thumbnail&pithumbsize=800&pilicense=free`;
+      const d = await (await fetch(url)).json();
+      const pages = Object.values(d?.query?.pages || {}).sort((a, b) => (a.index || 0) - (b.index || 0));
+      const hit = pages.find((p) => p.thumbnail?.source && !/\.svg/i.test(p.thumbnail.source));
+      if (hit) return { image: hit.thumbnail.source, imageCredit: `Wikipédia – ${hit.title}` };
+    } catch (e) { console.warn("Wikipédia kép", e); }
+  }
+  return null;
+}
+const imageTried = new Set();
+async function ensureCookImage(r) {
+  if (!r?.id || r.image || imageTried.has(r.id)) return;
+  imageTried.add(r.id);
+  const found = await findWikiImage(r.title || "");
+  if (found) { try { await backend.updateCooking(state.listId, r.id, found); } catch (e) { console.warn(e); } }
+}
 
 function renderCooking() {
   const n = state.cooking.length;
@@ -1419,7 +1457,7 @@ function renderCooking() {
   $("#cooking").innerHTML = `<ul class="cook-list">${state.cooking.map((r, i) => `
     <li class="cook-card">
       <button type="button" class="cook-open" data-cook="${i}">
-        ${r.image ? recipeImg(r.image, "cook-thumb") : `<span class="cook-thumb ph" aria-hidden="true">${ICON_POT}</span>`}
+        ${recipeImg(dishSrc(r), "cook-thumb", r.title)}
         <span class="cook-body">
           <strong>${esc(r.title)}</strong>
           <span class="cook-meta">${ICON_PEOPLE}${r.servings || 4} fő${r.minutes ? ` ${ICON_CLOCK}${r.minutes} perc` : ""}${r.steps?.length ? ` · ${r.steps.length} lépés` : ""}</span>
@@ -1427,10 +1465,24 @@ function renderCooking() {
         </span>
       </button>
       <div class="cook-foot">${sourceChip(r.sourceSite, r.sourceUrl)}
-        ${r.steps?.length ? `<button type="button" class="cook-go" data-steps="${i}">Főzés lépésről lépésre ›</button>` : ""}</div>
+        <span class="cook-actions">
+          <button type="button" class="cook-del" data-del="${i}" aria-label="Megfőztük – „${esc(r.title)}” törlése a Főzés fülről">${ICON_TRASH}</button>
+          ${r.steps?.length ? `<button type="button" class="cook-go" data-steps="${i}">Lépésről lépésre ›</button>` : ""}
+        </span></div>
     </li>`).join("")}</ul>`;
+  state.cooking.forEach((r) => { if (!r.image) ensureCookImage(r); });
+}
+const ICON_TRASH = svg('<path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 12.5a1.5 1.5 0 0 0 1.5 1.4h6a1.5 1.5 0 0 0 1.5-1.4l1-12.5M10 11v6M14 11v6"/>');
+async function deleteCooking(r) {
+  if (!r) return;
+  try {
+    await backend.removeCooking(state.listId, r.id);
+    const { id, createdAt, ...rest } = r;
+    toast(`Jó étvágyat! „${r.title}” lekerült a Főzés fülről.`, { label: "Visszavonás", run: () => backend.addCooking(state.listId, rest) }, "ok");
+  } catch (err) { console.error(err); toast("Nem sikerült törölni."); }
 }
 $("#cooking").addEventListener("click", (e) => {
+  const del = e.target.closest("[data-del]"); if (del) return deleteCooking(state.cooking[+del.dataset.del]);
   const st = e.target.closest("[data-steps]"); if (st) return openSteps(state.cooking[+st.dataset.steps]);
   const o = e.target.closest("[data-cook]"); if (o) return openCookSheet(state.cooking[+o.dataset.cook]);
 });
@@ -1443,14 +1495,14 @@ function openCookSheet(r) {
   cookOpen = r; cookDelArmed = false;
   const onList = new Set(state.items.map((i) => norm(i.name)));
   $("#cook-body").innerHTML = `
-    ${recipeImg(r.image, "cook-hero")}
+    ${recipeImg(dishSrc(r), "cook-hero", r.title)}
     <div class="cook-src">${sourceChip(r.sourceSite, r.sourceUrl)}<span>${ICON_PEOPLE}${r.servings || 4} fő${r.minutes ? ` · ${r.minutes} perc` : ""}</span></div>
     <h4>Hozzávalók</h4>
     <ul class="ing">${(r.ingredients || []).map((it) => `<li><span>${esc(it.name)}</span><span class="q">${esc(it.qty || "")}</span>${onList.has(norm(it.name)) ? `<i class="on" title="A listán">listán</i>` : ""}</li>`).join("")}</ul>
     <h4>Elkészítés</h4>
-    ${r.steps?.length ? `<ol class="steps">${r.steps.map((x) => `<li>${esc(x.text)}${recipeImg(x.image, "step-img")}</li>`).join("")}</ol>`
+    ${r.steps?.length ? `<ol class="steps">${r.steps.map((x) => `<li>${esc(x.text)}</li>`).join("")}</ol>`
       : `<p class="rhint">Ehhez a recepthez nincsenek lépések.${r.sourceUrl ? " Az eredeti receptet a forrás linkjén találod." : ""}</p>`}
-    <p class="credit">Recept${r.image ? " és kép" : ""}: ${esc(r.sourceSite || "")}${r.sourceUrl ? ` – <a href="${esc(r.sourceUrl)}" target="_blank" rel="noopener">eredeti recept ↗</a>` : ""}. A lépések az eredeti recept alapján, röviden összefoglalva.</p>`;
+    <p class="credit">Recept: ${esc(r.sourceSite || "")}${r.sourceUrl ? ` – <a href="${esc(r.sourceUrl)}" target="_blank" rel="noopener">eredeti recept ↗</a>` : ""}. A lépések az eredeti recept alapján, röviden összefoglalva. Kép: ${esc(r.image ? (r.imageCredit || r.sourceSite || "") : "illusztráció")}.</p>`;
   $("#cook-title").textContent = r.title;
   $("#cook-steps").hidden = !r.steps?.length;
   $("#cook-done").textContent = "Megfőztük, törölhető";
@@ -1461,8 +1513,7 @@ cookSheet.addEventListener("click", (e) => { if (e.target === cookSheet) cookShe
 $("#cook-steps").addEventListener("click", () => { cookSheet.close(); openSteps(cookOpen); });
 $("#cook-done").addEventListener("click", async () => {
   if (!cookDelArmed) { cookDelArmed = true; $("#cook-done").textContent = "Biztosan törlöd? Koppints újra"; return; }
-  try { await backend.removeCooking(state.listId, cookOpen.id); cookSheet.close(); toast(`Jó étvágyat! „${cookOpen.title}” lekerült a Főzés fülről.`); }
-  catch (err) { console.error(err); toast("Nem sikerült törölni."); }
+  cookSheet.close(); deleteCooking(cookOpen);
 });
 
 /* Lépésről lépésre mód – nagy betű, képernyő ébren tartása, hangvezérlés */
@@ -1490,7 +1541,7 @@ function renderStep() {
   $("#step-src").innerHTML = sourceChip(r.sourceSite, r.sourceUrl);
   $("#step-count").textContent = `${step.i + 1}. lépés / ${n}`;
   $("#step-bar").style.width = `${((step.i + 1) / n) * 100}%`;
-  $("#step-img").innerHTML = recipeImg(x.image, "step-big-img");
+  $("#step-img").innerHTML = recipeImg(dishSrc(r), "step-big-img", r.title);
   $("#step-text").textContent = x.text;
   $("#step-prev").disabled = step.i === 0;
   $("#step-next").textContent = step.i === n - 1 ? "Kész!" : "Következő ›";
@@ -1500,7 +1551,11 @@ function renderStep() {
 }
 function goStep(d) {
   const n = step.r.steps.length;
-  if (d > 0 && step.i === n - 1) { closeSteps(); toast("Jó étvágyat!"); return; }
+  if (d > 0 && step.i === n - 1) {
+    const r = step.r; closeSteps();
+    toast("Jó étvágyat! Ha megfőztétek, törölheted a Főzés fülről.", { label: "Törlés", run: () => deleteCooking(r) }, "ok");
+    return;
+  }
   step.i = Math.max(0, Math.min(n - 1, step.i + d));
   renderStep();
   if (step.voice) speak(`${step.i + 1}. lépés. ${step.r.steps[step.i].text}`);

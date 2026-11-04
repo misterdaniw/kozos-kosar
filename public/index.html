@@ -498,13 +498,20 @@ dialog.sheet.tall .sheet-body { height: 100%; grid-template-rows: auto auto auto
 .cook-meta, .cook-by { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; color: var(--muted); font-size: 13.5px; font-weight: 700; }
 .cook-meta svg { width: 15px; height: 15px; }
 .cook-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 0 12px 12px; }
+.cook-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.cook-del {
+  width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--line); background: var(--surface); color: var(--muted);
+  display: grid; place-items: center; flex: none;
+}
+.cook-del svg { width: 19px; height: 19px; }
+.cook-del:active { border-color: var(--danger); color: var(--danger); }
 .cook-go { border: 0; border-radius: 99px; padding: 9px 14px; background: var(--sun); color: var(--sun-ink); font: 600 14.5px/1 var(--f-display); }
 a.rsite { text-decoration: none; }
 
 /* Recipe detail */
 .cook-sheet-body { grid-template-rows: auto auto 1fr auto !important; }
 #cook-body { overflow-y: auto; min-height: 0; display: grid; gap: 12px; align-content: start; }
-.cook-hero { width: 100%; max-height: 220px; object-fit: cover; border-radius: 18px; }
+.cook-hero { display: block; width: 100%; height: 200px; object-fit: cover; border-radius: 18px; }
 .cook-src { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; color: var(--muted); font-weight: 700; font-size: 14px; }
 .cook-src span svg { width: 15px; height: 15px; vertical-align: -2px; margin-right: 3px; }
 #cook-body h4 { margin: 4px 0 0; font: 600 18px/1.2 var(--f-display); }
@@ -539,7 +546,7 @@ dialog.step-mode::backdrop { background: var(--bg); }
 .step-progress .bar { display: block; height: 8px; background: var(--surface); border-radius: 99px; overflow: hidden; }
 .step-progress i { display: block; height: 8px; background: var(--leaf); border-radius: 99px; transition: width .25s; }
 .step-main { overflow-y: auto; min-height: 0; display: grid; gap: 14px; align-content: start; }
-.step-big-img { width: 100%; max-height: 38dvh; object-fit: cover; border-radius: 20px; }
+.step-big-img { display: block; width: 100%; height: 26dvh; object-fit: cover; border-radius: 20px; }
 #step-text { margin: 0; font: 600 clamp(22px, 6vw, 30px)/1.4 var(--f-display); text-wrap: pretty; }
 .step-nav { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; }
 .step-nav .btn { padding: 18px; font-size: 19px; }
