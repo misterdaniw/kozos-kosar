@@ -178,7 +178,13 @@ if [ "$BILLING" = "true" ]; then
       "https://europe-west1-$P.cloudfunctions.net/searchRecipes" -d '{"data":{"query":"csirke","offset":0}}')
     echo "FN_TEST http=$code $(jq -c '{error: .error, n: (.result.recipes | length), first: ([.result.recipes[]? | .title + " | " + .site + " | img=" + (.image|.[0:50])] | .[0:4])}' /tmp/fn.json 2>/dev/null | cut -c1-900)"
   else echo "FN_TEST nem sikerült próba-felhasználót létrehozni"; fi
+  # A függvény maga ellenőrzi a belépést (onCall), ezért a Cloud Run előtti IAM-kapu nyitva lehet
+  echo "FN_TEST bind: $(gcloud run services add-iam-policy-binding searchrecipes --region europe-west1 --project "$P" --member=allUsers --role=roles/run.invoker --quiet 2>&1 | tail -1 | cut -c1-250)"
+  echo "FN_TEST noiamcheck: $(gcloud run services update searchrecipes --region europe-west1 --project "$P" --no-invoker-iam-check --quiet 2>&1 | tail -1 | cut -c1-250)"
   echo "FN_TEST iam: $(gcloud run services get-iam-policy searchrecipes --region europe-west1 --project "$P" --format=json 2>&1 | jq -c '[.bindings[]? | {role, members}]' 2>/dev/null | cut -c1-400)"
+  code=$(curl -sS -o /tmp/fn.json -w "%{http_code}" -X POST -H "Content-Type: application/json" -H "Authorization: Bearer $IDT" \
+    "https://europe-west1-$P.cloudfunctions.net/searchRecipes" -d '{"data":{"query":"csirke","offset":0}}')
+  echo "FN_TEST retry http=$code $(jq -c '{error: .error, n: (.result.recipes | length), first: ([.result.recipes[]? | .title + " | " + .site + " | img=" + (.image|.[0:50])] | .[0:5])}' /tmp/fn.json 2>/dev/null | cut -c1-900)"
   echo "FN_TEST invokerIamDisabled: $(gcloud run services describe searchrecipes --region europe-west1 --project "$P" --format='value(metadata.annotations."run.googleapis.com/invoker-iam-disabled")' 2>&1 | head -1)"
   echo "== Szerverfüggvény napló (utolsó hibák)"
   gcloud logging read "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"searchrecipes\" AND severity>=WARNING" \
