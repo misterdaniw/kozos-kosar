@@ -179,8 +179,9 @@ if [ "$BILLING" = "true" ]; then
     echo "FN_TEST http=$code $(jq -c '{error: .error, n: (.result.recipes | length), first: ([.result.recipes[]? | .title + " | " + .site + " | img=" + (.image|.[0:50])] | .[0:4])}' /tmp/fn.json 2>/dev/null | cut -c1-900)"
   else echo "FN_TEST nem sikerült próba-felhasználót létrehozni"; fi
   # A függvény maga ellenőrzi a belépést (onCall), ezért a Cloud Run előtti IAM-kapu nyitva lehet
+  SA_EMAIL="$(jq -r .client_email "$KEY")"
+  echo "FN_TEST roles: $(gcloud projects get-iam-policy "$P" --flatten='bindings[].members' --filter="bindings.members:serviceAccount:$SA_EMAIL" --format='value(bindings.role)' 2>&1 | tr '\n' ' ' | cut -c1-300)"
   echo "FN_TEST bind: $(gcloud run services add-iam-policy-binding searchrecipes --region europe-west1 --project "$P" --member=allUsers --role=roles/run.invoker --quiet 2>&1 | tail -1 | cut -c1-250)"
-  echo "FN_TEST noiamcheck: $(gcloud run services update searchrecipes --region europe-west1 --project "$P" --no-invoker-iam-check --quiet 2>&1 | tail -1 | cut -c1-250)"
   echo "FN_TEST iam: $(gcloud run services get-iam-policy searchrecipes --region europe-west1 --project "$P" --format=json 2>&1 | jq -c '[.bindings[]? | {role, members}]' 2>/dev/null | cut -c1-400)"
   code=$(curl -sS -o /tmp/fn.json -w "%{http_code}" -X POST -H "Content-Type: application/json" -H "Authorization: Bearer $IDT" \
     "https://europe-west1-$P.cloudfunctions.net/searchRecipes" -d '{"data":{"query":"csirke","offset":0}}')
@@ -190,3 +191,4 @@ if [ "$BILLING" = "true" ]; then
   gcloud logging read "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"searchrecipes\" AND severity>=WARNING" \
     --project "$P" --limit 8 --freshness 2h --format 'value(timestamp,severity,textPayload,jsonPayload.message)' 2>&1 | cut -c1-400 | sed 's/^/FN_LOG /'
 fi
+true  # a diagnosztika hibája ne állítsa le a feltöltést
