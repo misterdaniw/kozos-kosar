@@ -1,6 +1,6 @@
 // Közös Kosár – service worker: az alkalmazás héja offline is betölt.
 // A Firestore adatforgalmat nem érinti (azt a Firebase saját offline gyorsítótára kezeli).
-const CACHE = "kozos-kosar-v9";
+const CACHE = "kozos-kosar-v10";
 const SHELL = ["./", "./index.html", "./app.js", "./parser.js", "./config.js", "./manifest.webmanifest", "./icons/icon-192.png", "./icons/icon-512.png"];
 const STATIC_HOSTS = ["www.gstatic.com", "fonts.googleapis.com", "fonts.gstatic.com"];
 

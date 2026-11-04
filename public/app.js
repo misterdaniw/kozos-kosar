@@ -64,6 +64,7 @@ Szabályok:
 - A mennyiség metrikus mértékegységben vagy darabban, boltban kapható kiszerelésre kerekítve (pl. "1 kg", "50 dkg", "2 db", "1 fej", "450 g"). Ha nincs megadva adagszám, 4 adaggal számolj.
 - Ha több ételhez ugyanaz kell, vond össze egy tételbe.
 - staple=true azokra, amik a legtöbb háztartásban általában otthon vannak (só, bors, olaj, cukor, liszt, ecet, alap fűszerek). Vizet ne adj vissza.
+- gluten=true minden hozzávalóra, amely búzát, árpát vagy rozsot tartalmaz, különben false.
 - A kategória a megadott listából legyen.
 - title: rövid cím, pl. "Lecsó, 4 adag".
 - steps: az elkészítés lépései röviden, saját szavaiddal (legfeljebb 10 lépés, mindegyik 1-3 mondat), a megadott létszámra. minutes: a teljes elkészítési idő percben.
@@ -88,12 +89,13 @@ Szabályok:
 - Állapítsd meg, hány főre vagy adagra szól az eredeti recept (originalServings; ha nem derül ki, 4), és számold át a mennyiségeket a megadott létszámra, boltban kapható kiszerelésre kerekítve.
 - name: rövid, boltban szokásos név kisbetűvel. qty: az átszámolt mennyiség. category ezek egyike: ${CATS.join(" | ")}.
 - staple=true azokra, amik a legtöbb háztartásban általában otthon vannak (só, bors, olaj, cukor, liszt, alap fűszerek). Vizet ne adj vissza.
+- gluten=true minden hozzávalóra, amely búzát, árpát vagy rozsot tartalmaz (pl. liszt, zsemlemorzsa, tészta, kenyér, sör), különben false.
 - steps: az elkészítés lépései az oldal alapján, saját szavaiddal, tömören (legfeljebb 12 lépés, mindegyik 1-3 mondat), az eredeti sorrendben, a megadott létszámhoz igazítva. Ha egy lépéshez az oldalon saját kép tartozik, az image mezőbe írd a kép pontos (https) címét, különben hagyd üresen. Ne találj ki képcímet.
 - imageUrl: a recept fő képének pontos (https) címe, ha az oldalon szerepel, különben üres. minutes: a teljes elkészítési idő percben, ha kiderül, különben 0.
 - Ha az oldal nem recept, vagy nem tudtad beolvasni, az items legyen üres, és a note mezőben írd le röviden, mi a gond.
 - Ha az étel neve nagyon különböző recepteket takarhat (pl. "süti", "valami vacsora"), az items legyen üres, és kérdezz vissza: question + 2-4 rövid options.
 Válaszolj kizárólag egyetlen JSON objektummal, más szöveg nélkül, ebben a formában:
-{"title": "Lecsó", "sourceUrl": "https://...", "sourceSite": "Street Kitchen", "originalServings": 4, "minutes": 40, "imageUrl": "https://...", "items": [{"name": "lecsópaprika", "qty": "1 kg", "category": "Zöldség, gyümölcs", "staple": false}], "steps": [{"text": "A hagymát apróra vágjuk, és az olajon üvegesre pároljuk.", "image": ""}], "note": "", "question": "", "options": []}`;
+{"title": "Lecsó", "sourceUrl": "https://...", "sourceSite": "Street Kitchen", "originalServings": 4, "minutes": 40, "imageUrl": "https://...", "items": [{"name": "lecsópaprika", "qty": "1 kg", "category": "Zöldség, gyümölcs", "staple": false, "gluten": false}], "steps": [{"text": "A hagymát apróra vágjuk, és az olajon üvegesre pároljuk.", "image": ""}], "note": "", "question": "", "options": []}`;
 
 const RECIPE_SEARCH_PROMPT = `Egy magyar család receptkeresője vagy. A felhasználó megad egy alapanyagot, ételtípust vagy hangulatot (pl. "csirke", "gyors vacsora", "leves", "sütemény", "vega").
 Keress hozzá recepteket kizárólag a streetkitchen.hu és a mindmegette.hu oldalon (pl. "csirke recept site:streetkitchen.hu", "csirke recept site:mindmegette.hu"), mindkét oldalról vegyesen.
@@ -104,6 +106,11 @@ const RECIPE_IDEAS_PROMPT = `Egy magyar család receptötlet-adója vagy. A felh
 Adj 8 változatos ötletet olyan ételekre, amelyek a magyar receptoldalakon (Street Kitchen, Mindmegette) gyakoriak: klasszikus magyar ételek és népszerű modern fogások vegyesen, otthon elkészíthetőek.
 title: az étel szokásos magyar neve (rövid, pl. "Paprikás csirke nokedlivel"). description: egy rövid, kedvcsináló mondat. minutes: becsült elkészítési idő percben.
 Ha a kérés nem ételről szól, a recipes legyen üres, és a note mezőben kérj pontosítást.`;
+
+// „Glutén nélkül” szűrő: búza, árpa, rozs és minden belőlük készült termék kizárása
+const GLUTEN_RULE = `GLUTÉN NÉLKÜL: csak olyan ételt adj, amelyben nincs búza (búzaliszt, finomliszt, rétesliszt, zsemlemorzsa, tészta, nokedli, csipetke, kenyér, kalács, bulgur, kuszkusz, búzadara, tönköly), árpa (árpagyöngy, maláta, sör) és rozs. Kerüld a panírozott, tésztás, sütemény jellegű ételeket, kivéve ha kifejezetten gluténmentes változatról van szó. A zab csak akkor jó, ha gluténmentes zab.`;
+const GLUTEN_WORDS = /(búza|finomliszt|rétesliszt|^liszt|\bliszt|zsemlemorzsa|morzsa|tészta|spagetti|penne|fusilli|makaróni|nokedli|csipetke|kenyér|zsemle|kifli|kalács|bagett|tortilla|pita|bulgur|kuszkusz|búzadara|tönköly|árpa|maláta|sör|rozs|keksz|piskóta|leveles tészta|réteslap)/i;
+const hasGluten = (name) => GLUTEN_WORDS.test(norm(name)) && !/gluténmentes|rizsliszt|kukoricaliszt|mandulaliszt|rizstészta|rizs tészta|burgonyaliszt/.test(norm(name));
 
 const RECIPE_SITES = { "streetkitchen.hu": "Street Kitchen", "mindmegette.hu": "Mindmegette" };
 const isRecipeSite = (url) => { try { return !!RECIPE_SITES[new URL(url).hostname.replace(/^www\./, "")]; } catch { return false; } };
@@ -153,18 +160,18 @@ const DEMO_STEPS = {
   "rakott krumpli": ["Főzd meg héjában a krumplit és a tojásokat, majd hámozd meg és karikázd fel.", "Egy kivajazott tálba rétegezd a krumplit, tojást és kolbászt, minden réteget locsolj meg tejföllel.", "A tetejére krumpli és tejföl kerüljön.", "200 fokon süsd 30 percig, amíg a teteje szép pirosra sül."],
 };
 
-// Demó receptötletek a keresőhöz: [cím, kulcsszavak, leírás, perc]
+// Demó receptötletek a keresőhöz: [cím, kulcsszavak, leírás, perc, tartalmaz-e glutént]
 const DEMO_IDEAS = [
-  ["Paprikás csirke nokedlivel", "csirke csirkecomb paprikás magyar", "A vasárnapi klasszikus, sok tejföllel és házi nokedlivel.", 70],
-  ["Rántott csirke", "csirke csirkemell rántott", "Ropogós bunda, puha hús, mellé krumplipüré vagy saláta.", 40],
-  ["Mézes-mustáros csirkecomb", "csirke csirkecomb sült mézes", "Sütőben sül, magától lesz ragacsos és fényes.", 60],
-  ["Csirkés-brokkolis tészta", "csirke csirkemell tészta gyors brokkoli", "Fél óra alatt kész, krémes sajtos szósszal.", 30],
-  ["Csirkepörkölt", "csirke pörkölt magyar", "Egyszerű, laktató, egy lábasban készül.", 60],
-  ["Lecsó", "lecsó zöldség paprika nyár magyar vega", "Nyári kedvenc kolbásszal vagy anélkül, tojással.", 40],
-  ["Gulyásleves", "gulyás leves marha magyar", "Bográcsban vagy fazékban, csipetkével.", 120],
-  ["Bolognai spagetti", "bolognai tészta spagetti darált hús gyors", "A gyerekek kedvence, nagyobb adagban is megéri főzni.", 45],
-  ["Rakott krumpli", "rakott krumpli burgonya kolbász tojás magyar", "Rétegesen, sok tejföllel, sütőben sütve.", 75],
-  ["Palacsinta", "palacsinta desszert édes sütemény gyors", "Lekvárral, kakaóval vagy túróval töltve.", 30],
+  ["Paprikás csirke nokedlivel", "csirke csirkecomb paprikás magyar", "A vasárnapi klasszikus, sok tejföllel és házi nokedlivel.", 70, true],
+  ["Rántott csirke", "csirke csirkemell rántott", "Ropogós bunda, puha hús, mellé krumplipüré vagy saláta.", 40, true],
+  ["Mézes-mustáros csirkecomb", "csirke csirkecomb sült mézes", "Sütőben sül, magától lesz ragacsos és fényes.", 60, false],
+  ["Csirkés-brokkolis tészta", "csirke csirkemell tészta gyors brokkoli", "Fél óra alatt kész, krémes sajtos szósszal.", 30, true],
+  ["Csirkepörkölt", "csirke pörkölt magyar", "Egyszerű, laktató, egy lábasban készül.", 60, false],
+  ["Lecsó", "lecsó zöldség paprika nyár magyar vega", "Nyári kedvenc kolbásszal vagy anélkül, tojással.", 40, false],
+  ["Gulyásleves", "gulyás leves marha magyar", "Bográcsban vagy fazékban, csipetkével.", 120, true],
+  ["Bolognai spagetti", "bolognai tészta spagetti darált hús gyors", "A gyerekek kedvence, nagyobb adagban is megéri főzni.", 45, true],
+  ["Rakott krumpli", "rakott krumpli burgonya kolbász tojás magyar", "Rétegesen, sok tejföllel, sütőben sütve.", 75, false],
+  ["Palacsinta", "palacsinta desszert édes sütemény gyors", "Lekvárral, kakaóval vagy túróval töltve.", 30, true],
 ];
 
 function createDemoBackend() {
@@ -212,11 +219,11 @@ function createDemoBackend() {
     async removeCooking(id, cid) { await mutate(id, (d) => { d.cooking = (d.cooking || []).filter((c) => c.id !== cid); }); },
     async addFavorite(id, fav) { const fid = rid(); await mutate(id, (d) => { (d.favorites ||= []).push({ id: fid, createdAt: Date.now(), ...fav }); }); return fid; },
     async removeFavorite(id, favId) { await mutate(id, (d) => { d.favorites = (d.favorites || []).filter((f) => f.id !== favId); }); },
-    async searchRecipes(query, { exclude = [] } = {}) {
+    async searchRecipes(query, { exclude = [], glutenFree = false } = {}) {
       await new Promise((r) => setTimeout(r, 500));
       const words = norm(query).split(/\s+/).filter((w) => w.length > 2).map((w) => w.slice(0, 5));
       const seen = new Set(exclude.map(norm));
-      const hits = DEMO_IDEAS.filter(([t, k]) => words.some((w) => norm(t + " " + k).includes(w)) && !seen.has(norm(t))).slice(0, 3);
+      const hits = DEMO_IDEAS.filter(([t, k, , , gl]) => words.some((w) => norm(t + " " + k).includes(w)) && !seen.has(norm(t)) && !(glutenFree && gl)).slice(0, 3);
       return {
         recipes: hits.map(([title, , description, minutes]) => ({ title, description, minutes, url: "", site: "" })),
         note: hits.length ? "Demó ötletek. A beállított appban a Street Kitchen és a Mindmegette receptjeit listázza."
@@ -236,7 +243,7 @@ function createDemoBackend() {
       const merged = new Map();
       const f = servings / 4;
       const steps = hits.flatMap((k) => (DEMO_STEPS[k] || []).map((text) => ({ text, image: "" })));
-      hits.forEach((k) => DEMO_RECIPES[k].forEach(([name, qty, c, staple]) => { if (!merged.has(name)) merged.set(name, { name, qty: scaleQty(qty, f), category: CATS[c], staple: !!staple }); }));
+      hits.forEach((k) => DEMO_RECIPES[k].forEach(([name, qty, c, staple]) => { if (!merged.has(name)) merged.set(name, { name, qty: scaleQty(qty, f), category: CATS[c], staple: !!staple, gluten: hasGluten(name) }); }));
       return { title: hits.map((h) => h[0].toUpperCase() + h.slice(1)).join(" + "), items: [...merged.values()], originalServings: 4, steps, demo: true, minutes: 0,
         note: "Demó recept. A beállított appban a Street Kitchen vagy a Mindmegette receptjéből dolgozik." };
     },
@@ -335,6 +342,7 @@ async function createFirebaseBackend(cfg) {
               qty: Schema.string(),
               category: Schema.enumString({ enum: CATS }),
               staple: Schema.boolean(),
+              gluten: Schema.boolean(),
             },
           }),
         }),
@@ -418,12 +426,13 @@ async function createFirebaseBackend(cfg) {
       return ref.id;
     },
     async removeFavorite(id, favId) { await fs.deleteDoc(fs.doc(favsRef(id), favId)); },
-    async searchRecipes(query, { exclude = [] } = {}) {
+    async searchRecipes(query, { exclude = [], glutenFree = false } = {}) {
       await getModel();
+      const gf = glutenFree ? `\n${GLUTEN_RULE}` : "";
       // „További receptek”: ugyanarra a keresésre újabbak, a már látottak nélkül
       const more = exclude.length ? `\nMár megmutattuk ezeket, ezeket NE add vissza újra, hanem másokat: ${exclude.slice(0, 60).join("; ")}` : "";
       if (listModel) {
-        const res = await listModel.generateContent(`Keresés: ${query}${more}`);
+        const res = await listModel.generateContent(`Keresés: ${query}${glutenFree ? " (gluténmentes)" : ""}${more}${gf}`);
         const d = parseJsonLoose(res.response.text());
         const meta = res.response.candidates?.[0]?.groundingMetadata;
         const recipes = (d.recipes || []).map((r) => {
@@ -433,7 +442,7 @@ async function createFirebaseBackend(cfg) {
         return { recipes, note: d.note || "", searchEntryPoint: meta?.searchEntryPoint?.renderedContent || "",
           searchSources: (meta?.groundingChunks || []).map((c) => c.web).filter(Boolean).slice(0, 5) };
       }
-      const res = await ideasModel.generateContent(`Keresés: ${query}${more}`);
+      const res = await ideasModel.generateContent(`Keresés: ${query}${more}${gf}`);
       const d = JSON.parse(res.response.text());
       return { recipes: (d.recipes || []).map((r) => ({ ...r, url: "", site: "" })), note: d.note || "", ideas: true };
     },
@@ -442,7 +451,7 @@ async function createFirebaseBackend(cfg) {
       ids.forEach((x) => batch.delete(fs.doc(itemsRef(id), x)));
       await batch.commit();
     },
-    async suggest(prompt, existingNames, { servings = 4, url = null } = {}) {
+    async suggest(prompt, existingNames, { servings = 4, url = null, glutenFree = false } = {}) {
       const m = await getModel();
       const tidy = (data, extra = {}) => ({
         title: data.title || prompt, items: Array.isArray(data.items) ? data.items : [], note: data.note || "",
@@ -466,7 +475,8 @@ async function createFirebaseBackend(cfg) {
         });
       }
       const ctx = existingNames.length ? `\n\n(Már a listán van: ${existingNames.slice(0, 80).join(", ")}.)` : "";
-      const res = await m.generateContent(`Kérés: ${prompt}\nLétszám: ${servings} fő${ctx}`);
+      const gfx = glutenFree ? `\nGluténmentes változatot kérünk: a búzát, árpát, rozsot tartalmazó hozzávalók helyett gluténmentes alternatívát adj (pl. gluténmentes lisztkeverék, rizsliszt, gluténmentes tészta), és az ilyen hozzávaló nevében szerepeljen a „gluténmentes” szó.` : "";
+      const res = await m.generateContent(`Kérés: ${prompt}\nLétszám: ${servings} fő${ctx}${gfx}`);
       return tidy(JSON.parse(res.response.text()), { generic: true });
     },
     async interpret(text, openQuestions, existingNames) {
@@ -485,7 +495,7 @@ async function createFirebaseBackend(cfg) {
 /* ---------- Alkalmazás ---------- */
 const state = { listId: null, list: null, items: [], favorites: [], cooking: [], tab: "shop", unwatch: null, suggestion: null, seen: new Set(), firstLoad: true, questions: [], busy: 0, autoTried: false,
   search: { query: "", results: [], loading: false, tab: "search", meta: null } };
-const settings = { autoListen: LS.get("kk:autoListen", true), speak: LS.get("kk:speak", true) };
+const settings = { autoListen: LS.get("kk:autoListen", true), speak: LS.get("kk:speak", true), glutenFree: LS.get("kk:glutenFree", false) };
 let backend;
 let me = { uid: null, name: "" };
 
@@ -752,10 +762,29 @@ async function handleAdd(text, { voice: spoken }) {
     if (ans) { resolveQuestion(q.id); return addParsed([{ name: ans, qty: q.qty }], { text, spoken }); }
   }
   const local = parseSpoken(text);
-  // Gépelt szöveget a helyi értelmező kezel (pontos), diktálásnál a Gemini segít, ha a helyi nem biztos benne
-  // Mindig a Gemini értelmez (gépelve és diktálva is); a helyi értelmező csak tartalék, ha nincs net vagy a Gemini nem válaszol
   const askAI = backend.interpret && navigator.onLine !== false;
   if (!askAI) return applyResult(local, { text, spoken });
+  // Ütemes diktálás: az egyértelmű, ismert tételek („tej”, „két kiló krumpli”) azonnal felkerülnek, nem várnak a Geminire
+  if (spoken && local.confident && !local.questions.length && local.items.length && !state.questions.length) {
+    return applyResult(local, { text, spoken });
+  }
+  // A többit a Gemini értelmezi; a gyors egymásutánban mondottakat egy kérésben küldjük
+  if (spoken) return queueAI(text);
+  return interpretNow(text, { spoken, local });
+}
+
+const aiQueue = { texts: [], timer: null };
+function queueAI(text) {
+  aiQueue.texts.push(text);
+  clearTimeout(aiQueue.timer);
+  aiQueue.timer = setTimeout(() => {
+    const batch = aiQueue.texts.splice(0);
+    const joined = batch.join(", ");
+    interpretNow(joined, { spoken: true, local: parseSpoken(joined) });
+  }, 450);
+}
+
+async function interpretNow(text, { spoken, local }) {
   setBusy(1);
   if (!voice.wantOn) toast("Értelmezem…");
   try {
@@ -924,10 +953,12 @@ function runRecognizer() {
   rec.onend = () => {
     voice.running = false; voice.rec = null;
     // Androidon a felismerés minden szünet után leáll: amíg kell, újraindítjuk
-    if (voice.wantOn && !voice.speaking && voice.restarts++ < 200) setTimeout(runRecognizer, 120);
+    // azonnal újraindul, hogy a szünet utáni első szó se vesszen el
+    if (voice.wantOn && !voice.speaking && voice.restarts++ < 500) runRecognizer();
   };
   voice.rec = rec;
-  try { rec.start(); } catch (err) { voice.running = false; console.warn(err); }
+  try { rec.start(); }
+  catch (err) { voice.running = false; voice.rec = null; console.warn(err); if (voice.wantOn && !voice.speaking) setTimeout(runRecognizer, 150); }
 }
 
 function stopListening() {
@@ -1004,7 +1035,7 @@ async function fetchRecipe() {
   const openNames = state.items.filter((i) => !i.done).map((i) => i.name);
   const onList = new Set(openNames.map(norm));
   try {
-    const res = await backend.suggest(R.prompt, openNames, { servings: R.servings, url: R.url });
+    const res = await backend.suggest(R.prompt, openNames, { servings: R.servings, url: R.url, glutenFree: settings.glutenFree });
     if (!aiSheet.open || state.recipe !== R) return;
     state.suggestion = res;
     $("#ai-title").textContent = `${res.title || R.knownTitle || R.prompt}, ${R.servings} fő`;
@@ -1040,14 +1071,20 @@ async function fetchRecipe() {
     if (!res.items.length) return;
     $("#ai-list").innerHTML = res.items.map((it, i) => {
       const already = onList.has(norm(it.name));
-      const checked = !it.staple && !already;
+      const gl = settings.glutenFree && (it.gluten === true || hasGluten(it.name));
+      const checked = !it.staple && !already && !gl;
       const tag = already ? "már a listán" : it.staple ? "általában otthon van" : (it.category || "");
-      return `<li><label><input type="checkbox" data-i="${i}" ${checked ? "checked" : ""}>
-        <span><span class="nm">${esc(it.name)}</span><br><span class="tag">${esc(tag)}</span></span>
+      return `<li class="${gl ? "has-gluten" : ""}"><label><input type="checkbox" data-i="${i}" ${checked ? "checked" : ""}>
+        <span><span class="nm">${esc(it.name)}</span><br>${gl ? `<span class="tag warn">Glutént tartalmaz!</span>` : `<span class="tag">${esc(tag)}</span>`}</span>
         <span class="qty">${esc(it.qty || "")}</span></label></li>`;
     }).join("");
     $("#ai-list").hidden = false;
-    $("#ai-hint").hidden = !res.items.some((it) => it.staple || onList.has(norm(it.name)));
+    const glN = settings.glutenFree ? res.items.filter((it) => it.gluten === true || hasGluten(it.name)).length : 0;
+    $("#ai-hint").textContent = glN
+      ? `Glutén nélkül szűrő: ${glN} glutént tartalmazó hozzávalót nem jelöltem be. Helyette gluténmentes változatot érdemes venni. Az otthon lévő alapokat és a listán szereplőket sem jelöltem be.`
+      : "A már otthon lévő alapokat (só, olaj…) és a listán szereplőket nem jelöltem be.";
+    $("#ai-hint").classList.toggle("warn-hint", glN > 0);
+    $("#ai-hint").hidden = !glN && !res.items.some((it) => it.staple || onList.has(norm(it.name)));
     updateAddCount();
   } catch (err) {
     console.error(err);
@@ -1144,7 +1181,8 @@ async function searchRecipes(query, { spoken = false } = {}) {
   Object.assign(S, { query, results: [], loading: true, tab: "search", meta: null, error: "", moreLoading: false, noMore: false, moreError: "" });
   renderRecipes();
   try {
-    const r = await backend.searchRecipes(query);
+    const r = await backend.searchRecipes(query, { glutenFree: settings.glutenFree });
+    (r.recipes || []).forEach((x) => { x.gf = settings.glutenFree; });
     if (S.query !== query) return;
     Object.assign(S, { results: r.recipes || [], loading: false, meta: r });
     if (!S.results.length) console.warn("Üres receptlista", r);
@@ -1169,7 +1207,8 @@ async function moreRecipes() {
   Object.assign(S, { moreLoading: true, moreError: "" });
   renderRecipes();
   try {
-    const r = await backend.searchRecipes(query, { exclude: S.results.map((x) => x.title) });
+    const r = await backend.searchRecipes(query, { exclude: S.results.map((x) => x.title), glutenFree: settings.glutenFree });
+    (r.recipes || []).forEach((x) => { x.gf = settings.glutenFree; });
     if (S.query !== query) return;
     const seen = new Set(S.results.map((x) => favKey(x)));
     const fresh = (r.recipes || []).filter((x) => x.title && !seen.has(favKey(x)));
@@ -1232,7 +1271,7 @@ function recipeCard(r, i, src) {
     : `<a class="rlink" href="${esc(siteSearchUrl(r.title))}" target="_blank" rel="noopener" aria-label="Keresés a Street Kitchenen és a Mindmegettén">${ICON_OUT}</a>`;
   return `<li class="rcard">
     <button type="button" class="rmain" data-pick="${i}">
-      <span class="rsite ${siteCls}">${esc(site || "Ötlet")}</span>
+      <span class="rchips"><span class="rsite ${siteCls}">${esc(site || "Ötlet")}</span>${r.gf ? `<span class="rsite gf">Glutén nélkül</span>` : ""}</span>
       <strong>${esc(r.title)}</strong>
       ${r.description ? `<span class="rdesc">${esc(r.description)}</span>` : ""}
       ${meta ? `<span class="rmeta">${esc(meta)}</span>` : ""}
@@ -1292,6 +1331,18 @@ function renderRecipes() {
 }
 $("#rs-tab-search").addEventListener("click", () => { state.search.tab = "search"; renderRecipes(); });
 $("#rs-tab-favs").addEventListener("click", () => { state.search.tab = "favs"; renderRecipes(); });
+function renderGf() {
+  $("#rs-gf").setAttribute("aria-pressed", String(settings.glutenFree));
+  $("#rs-gf").classList.toggle("on", settings.glutenFree);
+}
+$("#rs-gf").addEventListener("click", () => {
+  settings.glutenFree = !settings.glutenFree; LS.set("kk:glutenFree", settings.glutenFree);
+  renderGf();
+  toast(settings.glutenFree ? "Glutén nélkül: csak búza, árpa és rozs nélküli recepteket mutatok." : "A glutén szűrő kikapcsolva.", null, "info");
+  const S = state.search;
+  if (S.query && S.tab === "search") searchRecipes(S.query); // újrakeresés a szűrővel
+});
+renderGf();
 $("#rs-body").addEventListener("click", (e) => {
   if (e.target.closest("#rs-more")) return moreRecipes();
   const chip = e.target.closest("[data-q]");
