@@ -1263,6 +1263,25 @@ function pickRecipe(r, { spoken = false } = {}) {
   runSuggest(r.url || r.title, { fromSearch: true, title: r.title, spoken });
 }
 
+// Ételfotók a találatokhoz: Wikipédia (memóriában és a telefonon gyorsítótárazva), addig rajzos kép
+const dishImageCache = new Map(Object.entries(LS.get("kk:dishimg", {})));
+const dishImagePending = new Set();
+function loadResultImages() {
+  document.querySelectorAll("#rs-body img.rimg[data-imgkey]").forEach((img) => {
+    const key = img.dataset.imgkey;
+    const cached = dishImageCache.get(key);
+    if (cached) { if (img.getAttribute("src") !== cached) img.src = cached; return; }
+    if (cached === "" || dishImagePending.has(key)) return; // már kerestük, nincs kép
+    dishImagePending.add(key);
+    findWikiImage(img.closest(".rcard")?.querySelector("strong")?.textContent || key).then((found) => {
+      dishImagePending.delete(key);
+      dishImageCache.set(key, found?.image || "");
+      try { LS.set("kk:dishimg", Object.fromEntries([...dishImageCache].slice(-200))); } catch {}
+      if (found?.image) document.querySelectorAll(`#rs-body img.rimg[data-imgkey="${CSS.escape(key)}"]`).forEach((el) => { el.src = found.image; });
+    });
+  });
+}
+
 function recipeCard(r, i, src) {
   const fav = !!findFav(r);
   const site = r.site || (r.url ? siteOf(r.url) : "");
@@ -1271,12 +1290,18 @@ function recipeCard(r, i, src) {
   const out = r.url
     ? `<a class="rlink" href="${esc(r.url)}" target="_blank" rel="noopener" aria-label="Recept megnyitása az oldalon">${ICON_OUT}</a>`
     : `<a class="rlink" href="${esc(siteSearchUrl(r.title))}" target="_blank" rel="noopener" aria-label="Keresés a Street Kitchenen és a Mindmegettén">${ICON_OUT}</a>`;
+  const imgKey = norm(r.title);
+  const known = r.image || dishImageCache.get(imgKey);
   return `<li class="rcard">
     <button type="button" class="rmain" data-pick="${i}">
-      <span class="rchips"><span class="rsite ${siteCls}">${esc(site || "Ötlet")}</span>${r.gf ? `<span class="rsite gf">Glutén nélkül</span>` : ""}</span>
-      <strong>${esc(r.title)}</strong>
-      ${r.description ? `<span class="rdesc">${esc(r.description)}</span>` : ""}
-      ${meta ? `<span class="rmeta">${esc(meta)}</span>` : ""}
+      <img class="rimg" data-imgkey="${esc(imgKey)}" src="${esc(known || dishArt(r.title))}" alt="" loading="lazy" referrerpolicy="no-referrer"
+        onerror="this.onerror=null;this.src='${dishArt(r.title).replace(/'/g, "%27")}'">
+      <span class="rtext">
+        <span class="rchips"><span class="rsite ${siteCls}">${esc(site || "Ötlet")}</span>${r.gf ? `<span class="rsite gf">Glutén nélkül</span>` : ""}</span>
+        <strong>${esc(r.title)}</strong>
+        ${r.description ? `<span class="rdesc">${esc(r.description)}</span>` : ""}
+        ${meta ? `<span class="rmeta">${esc(meta)}</span>` : ""}
+      </span>
     </button>
     <div class="ract">
       <button type="button" class="star${fav ? " on" : ""}" data-fav="${i}" aria-pressed="${fav}" aria-label="${fav ? "Eltávolítás a kedvencek közül" : "Hozzáadás a kedvencekhez"}: ${esc(r.title)}">${ICON_STAR}</button>
@@ -1330,6 +1355,7 @@ function renderRecipes() {
     html += `<a class="rsite-search" href="${esc(siteSearchUrl(S.query))}" target="_blank" rel="noopener">Keresés közvetlenül a Street Kitchenen és a Mindmegettén ${ICON_OUT}</a>`;
   }
   $("#rs-body").innerHTML = html;
+  loadResultImages();
 }
 $("#rs-tab-search").addEventListener("click", () => { state.search.tab = "search"; renderRecipes(); });
 $("#rs-tab-favs").addEventListener("click", () => { state.search.tab = "favs"; renderRecipes(); });

@@ -114,15 +114,3 @@ for MODEL in $MODELS; do
   echo "GEMINI_TEST $MODEL http=$code $(jq -c '{error: .error.message, status: .error.status, text: (.candidates[0].content.parts[0].text // null)}' /tmp/gem.json 2>/dev/null | cut -c1-300)"
 done
 
-echo "== Recept-forrás próba (URL context és Google keresés az ingyenes kereten)"
-rtest() { # $1 = címke, $2 = JSON body
-  local code; code=$(curl -sS -o /tmp/rt.json -w "%{http_code}" -X POST \
-    -H "Content-Type: application/json" -H "x-goog-api-key: $APIKEY" -H "X-Firebase-AppId: $APPID" \
-    "https://firebasevertexai.googleapis.com/v1beta/projects/$P/models/gemini-3.5-flash-lite:generateContent" -d "$2")
-  echo "RECIPE_TEST $1 http=$code $(jq -c '{error: .error.message, text: ([.candidates[0].content.parts[]?.text] | join(" ") | .[0:900]), urlmeta: (.candidates[0].urlContextMetadata.urlMetadata // [] | map(.urlRetrievalStatus + " " + .retrievedUrl) | join(" | "))}' /tmp/rt.json 2>/dev/null | cut -c1-1400)"
-}
-ASK='Olvasd be az oldalt, és sorold fel az első 5 receptet, ami a találatok között szerepel: cím és a recept pontos, teljes URL-je, soronként „cím | url” formában. Csak azt írd, ami az oldalon ténylegesen szerepel.'
-for U in "https://streetkitchen.hu/?s=csirke" "https://www.mindmegette.hu/kereses?q=csirke" "https://www.mindmegette.hu/search?q=csirke"; do
-  rtest "url:$U" "$(jq -n --arg t "$ASK $U" '{contents:[{role:"user",parts:[{text:$t}]}], tools:[{urlContext:{}}]}')"
-done
-rtest "google" "$(jq -n '{contents:[{role:"user",parts:[{text:"Keress csirkés recepteket a streetkitchen.hu oldalon, és sorold fel 3 recept címét és URL-jét."}]}], tools:[{googleSearch:{}}]}')"
