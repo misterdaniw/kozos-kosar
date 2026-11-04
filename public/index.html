@@ -67,7 +67,7 @@
 }
 * { box-sizing: border-box; }
 img { max-width: 100%; height: auto; }
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; background: var(--bg); }
 body {
   margin: 0; background: var(--bg); color: var(--ink);
   font: 500 16px/1.45 var(--f-body);
@@ -369,13 +369,15 @@ dialog.sheet::backdrop { background: rgba(17,23,39,.45); }
 .toggle small { display: block; color: var(--muted); font-size: 13px; font-weight: 600; }
 
 /* Servings picker + recipe source */
-.serv { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.serv { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 5px; }
 .serv button {
-  border: 0; border-radius: 16px; padding: 10px 0 8px; background: var(--sun-soft); color: var(--ink);
-  font: 700 22px/1 var(--f-display); display: grid; justify-items: center; gap: 2px;
+  border: 0; border-radius: 11px; height: 38px; padding: 0; background: var(--sun-soft); color: var(--ink);
+  font: 700 16px/1 var(--f-display);
 }
-.serv button small { font: 600 12px/1 var(--f-body); color: var(--muted); }
-.serv button.last { outline: 2.5px solid var(--sun); }
+.serv button.last { outline: 2px solid var(--sun); outline-offset: -2px; }
+#ai-servings { padding: 10px 12px; gap: 8px; border-width: 2px; border-radius: 16px; }
+#ai-servings .qhead strong { font-size: 15px; }
+#ai-servings .qbadge { width: 24px; height: 24px; font-size: 14px; }
 .serv button:active { background: var(--sun); color: var(--sun-ink); }
 .source { margin: 0; font-size: 14.5px; font-weight: 600; color: var(--muted) !important; background: var(--bg); border-radius: 14px; padding: 10px 14px; }
 .source a, a.from { color: var(--accent); font-weight: 700; text-decoration: none; }

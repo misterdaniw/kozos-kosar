@@ -1100,8 +1100,9 @@ async function runSuggest(prompt, { spoken = false, fromSearch = false, title = 
 function askServings() {
   const last = LS.get("kk:servings", 4);
   $("#ai-servings").innerHTML = `<div class="qhead"><span class="qbadge" aria-hidden="true">?</span><strong>Hány főre főzöl?</strong></div>
-    <div class="serv">${[1, 2, 3, 4, 5, 6, 8, 10].map((n) => `<button type="button" data-n="${n}" class="${n === last ? "last" : ""}">${n}<small>fő</small></button>`).join("")}</div>`;
+    <div class="serv">${[1, 2, 3, 4, 5, 6, 8, 10].map((n) => `<button type="button" data-n="${n}" aria-label="${n} fő" class="${n === last ? "last" : ""}">${n}</button>`).join("")}</div>`;
   $("#ai-servings").hidden = false;
+  $("#ai-view").disabled = false; // a recept a létszám kiválasztása nélkül is megnézhető (a legutóbbi létszámmal)
   if (state.recipe.spoken && voice.wantOn) { voice.mode = "servings"; speak("Hány főre főzöl?"); }
 }
 function chooseServings(n) {
@@ -1188,11 +1189,14 @@ async function fetchRecipe() {
       : R.url ? "Nem sikerült kiolvasni a receptet erről az oldalról. Próbáld újra, vagy oszd meg egy másik recept linkjét."
       : "Most nem sikerült elérni az AI-t. Ellenőrizd az internetkapcsolatot, és próbáld újra.";
     $("#ai-note").textContent += errDetail(err);
+    $("#ai-view").textContent = "Recept megnézése";
     $("#ai-note").hidden = false;
   }
 }
 function updateAddCount() {
   $("#ai-view").disabled = !state.suggestion?.items?.length;
+  $("#ai-view").textContent = "Recept megnézése";
+  if (state.recipe?.viewAfterLoad && state.suggestion?.items?.length) { state.recipe.viewAfterLoad = false; setTimeout(() => $("#ai-view").click(), 0); }
   const n = $("#ai-list").querySelectorAll("input:checked").length;
   $("#ai-add").disabled = n === 0;
   $("#ai-add").textContent = n ? `Hozzáadás (${n})` : "Hozzáadás";
@@ -1218,6 +1222,12 @@ function buildCookEntry(s) {
   };
 }
 $("#ai-view").addEventListener("click", async () => {
+  if (!$("#ai-servings").hidden && state.recipe) { // még nincs létszám: a legutóbbival számolunk, és betöltés után megnyitjuk
+    state.recipe.viewAfterLoad = true;
+    $("#ai-view").disabled = true; $("#ai-view").textContent = "Recept betöltése…";
+    chooseServings(LS.get("kk:servings", 4));
+    return;
+  }
   const s = state.suggestion; if (!s) return;
   const btn = $("#ai-view");
   const r = { id: "preview", ...buildCookEntry(s) };
@@ -1927,7 +1937,15 @@ async function checkForUpdate() {
 }
 $("#update-now").addEventListener("click", async () => {
   $("#update-now").disabled = true; $("#update-now").textContent = "Frissítés…";
-  try { const reg = await navigator.serviceWorker?.getRegistration(); await reg?.update(); } catch {}
+  // megvárjuk, hogy az új verzió települjön (legfeljebb 6 mp), utána újratöltünk
+  try {
+    const sw = navigator.serviceWorker; const reg = await sw?.getRegistration();
+    if (reg) {
+      const changed = new Promise((r) => sw.addEventListener("controllerchange", r, { once: true }));
+      await reg.update();
+      if (reg.installing || reg.waiting) await Promise.race([changed, new Promise((r) => setTimeout(r, 6000))]);
+    }
+  } catch {}
   location.reload();
 });
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkForUpdate(); });
