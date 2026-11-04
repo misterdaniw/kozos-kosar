@@ -161,6 +161,15 @@ if [ "$BILLING" = "true" ]; then
 fi
 
 if [ "$BILLING" = "true" ]; then
+  echo "== Gemini a Google Cloud (Agent Platform) szolgáltatáson – utólagos számlázás, nem kell előre fizetett kredit"
+  gcloud services enable aiplatform.googleapis.com firebasevertexai.googleapis.com --project "$P" || warn "Az aiplatform API bekapcsolása nem sikerült."
+  for M in gemini-3.5-flash-lite gemini-3.8-flash; do
+    code=$(curl -sS -o /tmp/ag.json -w "%{http_code}" -X POST -H "Content-Type: application/json" -H "x-goog-api-key: $APIKEY" -H "X-Firebase-AppId: $APPID" \
+      "https://firebasevertexai.googleapis.com/v1beta/projects/$P/locations/global/publishers/google/models/$M:generateContent" \
+      -d '{"contents":[{"role":"user","parts":[{"text":"Mondj egy magyar csirkés ételt, csak a nevét."}]}]}')
+    echo "AGENT_TEST $M http=$code $(jq -c '{error: .error.message, text: (.candidates[0].content.parts[0].text // null)}' /tmp/ag.json 2>/dev/null | cut -c1-300)"
+  done
+
   echo "== Szerverfüggvény próbahívás egy névtelen próba-felhasználóval"
   IDT="$(curl -sS -X POST -H "Content-Type: application/json" -H "X-Firebase-AppId: $APPID" "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$APIKEY" -d '{"returnSecureToken":true}' | jq -r '.idToken // empty')"
   if [ -n "$IDT" ]; then
