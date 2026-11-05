@@ -247,3 +247,34 @@ export function scaleQty(qty, f) {
   else v = Math.round(v * 10) / 10;
   return `${String(v).replace(".", ",")} ${unit}`.trim();
 }
+
+// Mennyiségek összeadása: "500g" + "200 g" → "700 g"; "1 kg" + "50 dkg" → "1,5 kg"; eltérő egységnél "2 db + 1 csomag"
+const QUNITS = { g: ["g", 1], gr: ["g", 1], gramm: ["g", 1], dkg: ["g", 10], deka: ["g", 10], dk: ["g", 10], kg: ["g", 1000], kiló: ["g", 1000], kilo: ["g", 1000],
+  ml: ["ml", 1], cl: ["ml", 10], dl: ["ml", 100], l: ["ml", 1000], liter: ["ml", 1000], "": ["db", 1], db: ["db", 1], darab: ["db", 1] };
+function parseQ(q) {
+  const m = String(q || "").trim().toLowerCase().match(/^(\d+(?:[.,]\d+)?)\s*([a-záéíóöőúüű]*)\.?$/);
+  if (!m) return null;
+  const v = parseFloat(m[1].replace(",", "."));
+  const [base, f] = QUNITS[m[2]] || [m[2], 1];
+  return { v: v * f, base, unit: m[2] };
+}
+const num = (v) => String(Math.round(v * 10) / 10).replace(".", ",");
+export function addQty(a, b) {
+  a = String(a || "").trim(); b = String(b || "").trim();
+  if (!a) return b; if (!b) return a;
+  const pa = parseQ(a), pb = parseQ(b);
+  if (!pa || !pb || pa.base !== pb.base) return `${a} + ${b}`.slice(0, 30);
+  const t = pa.v + pb.v;
+  if (pa.base === "g") return t >= 1000 ? `${num(t / 1000)} kg` : (/^(dkg|deka|dk)$/.test(pa.unit) || /^(dkg|deka|dk)$/.test(pb.unit)) ? `${num(t / 10)} dkg` : `${num(t)} g`;
+  if (pa.base === "ml") return t >= 1000 ? `${num(t / 1000)} l` : t >= 100 && t % 100 === 0 ? `${num(t / 100)} dl` : `${num(t)} ml`;
+  return `${num(t)} ${pa.base}`.trim();
+}
+// Gyors „+” lehetőségek a tétel egysége szerint
+export function qtySteps(qty) {
+  const q = parseQ(qty);
+  if (!q) return ["1 db", "2 db", "1 csomag"];
+  if (q.base === "g") return q.unit === "kg" || q.unit === "kiló" ? ["50 dkg", "1 kg", "2 kg"] : /^(dkg|deka|dk)$/.test(q.unit) ? ["10 dkg", "20 dkg", "50 dkg"] : ["100 g", "250 g", "500 g"];
+  if (q.base === "ml") return ["2 dl", "5 dl", "1 l"];
+  const u = q.base === "db" && !q.unit ? "db" : q.unit;
+  return [`1 ${u}`, `2 ${u}`, `5 ${u}`];
+}

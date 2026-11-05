@@ -179,7 +179,28 @@ ul.items { list-style: none; margin: 0; padding: 0 0 6px; }
   width: 40px; height: 40px; border: 0; background: none; color: var(--muted); opacity: .7;
   border-radius: 12px; display: grid; place-items: center; flex: none;
 }
-.del svg { width: 18px; height: 18px; }
+.del svg { width: 20px; height: 20px; }
+.more { flex: none; width: 34px; height: 34px; border: 0; border-radius: 50%; background: var(--soft); color: var(--soft-ink); display: grid; place-items: center; padding: 0; }
+.more svg { width: 16px; height: 16px; }
+.item-price { font-size: 13px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+.price-card { display: flex; align-items: center; gap: 12px; background: var(--surface); border-radius: 20px; padding: 12px 12px 12px 16px; margin-bottom: 14px; box-shadow: var(--shadow); }
+.price-card.flat { box-shadow: none; background: var(--bg); margin: 0; border-radius: 16px; }
+.pc-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.pc-text b { font: 600 17px/1.2 var(--f-display); }
+.pc-text small { font-size: 13px; font-weight: 600; color: var(--muted); line-height: 1.35; }
+.pc-miss { color: var(--accent); font-weight: 700; }
+.pc-live { display: inline-flex; align-items: center; gap: 6px; color: var(--soft-ink); }
+.pc-live i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; animation: pcBlink 1s ease-in-out infinite; }
+@keyframes pcBlink { 50% { opacity: .2; } }
+.price-btn { flex: none; display: inline-flex; flex-direction: column; align-items: center; gap: 3px; min-width: 64px; border: 0; border-radius: 16px; padding: 8px 10px 7px; background: var(--soft); color: var(--soft-ink); font: 700 12px/1 var(--f-display); cursor: pointer; }
+.price-btn svg { width: 24px; height: 24px; }
+.price-btn:disabled { opacity: 1; cursor: progress; }
+.busy .price-btn svg { animation: calcShake .7s ease-in-out infinite; }
+@keyframes calcShake { 25% { transform: rotate(-10deg); } 75% { transform: rotate(10deg); } }
+.ing-price { display: block; font-size: 12px; font-weight: 700; color: var(--muted); }
+.more-now { margin: 0; color: var(--muted); font-weight: 600; }
+.more-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.more-chips button { border: 0; border-radius: 99px; padding: 10px 14px; background: var(--sun-soft); color: var(--ink); font: 700 15px/1 var(--f-display); }
 .del:hover { color: var(--danger); opacity: 1; }
 .link-btn {
   margin-left: 4px; border: 0; border-radius: 99px; padding: 6px 12px;
@@ -722,6 +743,20 @@ body { overflow-x: hidden; }
   </div>
 </div>
 
+<!-- Még több egy tételből -->
+<dialog class="sheet" id="more-sheet">
+  <form class="sheet-body" id="more-form">
+    <div class="sheet-head"><h3 id="more-title">Még több</h3></div>
+    <p class="more-now" id="more-now"></p>
+    <div class="more-chips" id="more-chips"></div>
+    <div class="field"><label for="more-q">Vagy írd be, mennyivel több kell</label><input id="more-q" placeholder="pl. 300 g, 2 db" autocomplete="off" enterkeyhint="done"></div>
+    <div class="row">
+      <button class="btn ghost" type="button" id="more-cancel">Mégse</button>
+      <button class="btn ai" type="submit">Hozzáadás</button>
+    </div>
+  </form>
+</dialog>
+
 <!-- AI sheet -->
 <dialog class="sheet" id="ai-sheet">
   <div class="sheet-body">
@@ -737,6 +772,7 @@ body { overflow-x: hidden; }
     <div id="ai-q" class="qcard flat" hidden></div>
     <div id="ai-gsearch" hidden></div>
     <ul class="suggest-list" id="ai-list" hidden></ul>
+    <div id="ai-cost" class="price-card flat" hidden></div>
     <p id="ai-hint" hidden>A már otthon lévő alapokat (só, olaj…) és a listán szereplőket nem jelöltem be.</p>
     <div class="row">
       <button class="btn ghost" type="button" id="ai-cancel">Mégse</button>

@@ -1,7 +1,7 @@
 // Közös Kosár – közös családi bevásárlólista
 // Két háttér: Firebase (élő, valós idejű szinkron + Gemini AI) vagy demó (csak ezen az eszközön).
 
-import { CATS, norm, guessCategory, parseSpoken, matchAnswer, matchOption, splitStop, SKIP, parseServings, stripServings, scaleQty } from "./parser.js";
+import { CATS, norm, guessCategory, parseSpoken, matchAnswer, matchOption, splitStop, SKIP, parseServings, stripServings, scaleQty, addQty, qtySteps } from "./parser.js";
 
 const FIREBASE_CDN = "https://www.gstatic.com/firebasejs/13.1.0";
 // A feltöltési folyamat ide írja be a verzió azonosítóját (és ugyanezt a version.json-ba)
@@ -58,6 +58,12 @@ function toast(msg, action, kind) {
 }
 
 /* ---------- AI utasítás (Gemini) ---------- */
+const PRICE_PROMPT = `Magyar bevásárlólista-asszisztens vagy. A kapott tételek (név és mennyiség) árát becsüld meg forintban,
+a magyarországi szupermarketek (Lidl, Aldi, Tesco, Spar, Auchan, Penny) mostani, szokásos fogyasztói árai alapján.
+- A megadott mennyiség árát add meg (pl. "2 kg krumpli" → 2 kg ára). Ha nincs mennyiség, egy szokásos kiszerelés árát (pl. 1 l tej, 1 db kenyér, 10 db tojás, 1 kg krumpli), és ezt írd az "assumed" mezőbe.
+- Recept hozzávalóinál, ha csak kis mennyiség kell (pl. 1 tk só, 2 gerezd fokhagyma), a felhasznált mennyiség arányos árát add (akár 10–50 Ft).
+- Egész szám, 10 Ft-ra kerekítve. Ne hagyj ki tételt: minden bemeneti sorszámra (i) adj egy árat.`;
+
 const SYSTEM_PROMPT = `Egy magyar család bevásárlólista-asszisztense vagy.
 A felhasználó megnevez egy vagy több ételt (adagszámmal vagy anélkül), vagy szabad szöveggel kér valamit (pl. "reggelire valók egy hétre", "vasárnapi ebéd 6 főre").
 Add vissza, amit meg kell venni hozzá.
@@ -203,7 +209,7 @@ function createDemoBackend() {
       const cb = (d) => {
         if (d) onCook?.((d.cooking || []).slice().sort((a, b) => b.createdAt - a.createdAt));
         if (!d) return onError(new Error("not-found"));
-        onList({ name: d.name, members: d.members });
+        onList({ name: d.name, members: d.members, pricesAt: d.pricesAt || 0, pricesBy: d.pricesBy || "" });
         onItems(d.items.slice());
         onFavs?.((d.favorites || []).slice().sort((a, b) => b.createdAt - a.createdAt));
       };
@@ -240,6 +246,13 @@ function createDemoBackend() {
       };
     },
     async updateItem(id, itemId, patch) { await mutate(id, (d) => { const it = d.items.find((x) => x.id === itemId); if (it) Object.assign(it, patch); }); },
+    async updateItems(id, patches, listPatch) {
+      await mutate(id, (d) => { patches.forEach(({ id: itemId, patch }) => { const it = d.items.find((x) => x.id === itemId); if (it) Object.assign(it, patch); }); if (listPatch) Object.assign(d, listPatch); });
+    },
+    async estimatePrices(items) { // demó: kitalált, de állandó árak
+      await new Promise((r) => setTimeout(r, 1200));
+      return items.map((it) => { let s = 0; for (const c of norm(it.name)) s = (s * 31 + c.charCodeAt(0)) % 997; return { price: 190 + Math.round((s / 997) * 1800 / 10) * 10, assumed: it.qty ? "" : "1 db" }; });
+    },
     async deleteItems(id, ids) { await mutate(id, (d) => { d.items = d.items.filter((x) => !ids.includes(x.id)); }); },
     async suggest(prompt, _existing, { servings = 4, url = null } = {}) {
       await new Promise((r) => setTimeout(r, 650));
@@ -307,7 +320,7 @@ async function createFirebaseBackend(cfg) {
   }
   const cookRef = (id) => fs.collection(db, "lists", id, "cooking");
 
-  let model = null, interpreter = null, urlModel = null, searchModel = null, ideasModel = null, listModel = null;
+  let priceModel = null, model = null, interpreter = null, urlModel = null, searchModel = null, ideasModel = null, listModel = null;
   async function getModel() {
     if (model) return model;
     const [aiMod] = await Promise.all([import(`${FIREBASE_CDN}/firebase-ai.js`), ensureAppCheck()]);
@@ -376,6 +389,15 @@ async function createFirebaseBackend(cfg) {
       },
       optionalProperties: ["note", "question", "options", "minutes"],
     });
+    priceModel = resilient({
+      systemInstruction: PRICE_PROMPT,
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: Schema.object({ properties: { prices: Schema.array({ items: Schema.object({
+          properties: { i: Schema.integer(), price: Schema.integer(), assumed: Schema.string() }, optionalProperties: ["assumed"],
+        }) }) } }),
+      },
+    }, FAST);
     model = resilient({
       systemInstruction: SYSTEM_PROMPT,
       generationConfig: { responseMimeType: "application/json", responseSchema: schema },
@@ -441,6 +463,20 @@ async function createFirebaseBackend(cfg) {
       return refs.map((r) => r.id); // offline is azonnal visszatér, a Firestore később szinkronizál
     },
     async updateItem(id, itemId, patch) { await fs.updateDoc(fs.doc(itemsRef(id), itemId), patch); },
+    async updateItems(id, patches, listPatch) {
+      const batch = fs.writeBatch(db);
+      patches.forEach(({ id: itemId, patch }) => batch.update(fs.doc(itemsRef(id), itemId), patch));
+      if (listPatch) batch.update(listRef(id), listPatch);
+      await batch.commit();
+    },
+    // Becsült árak (Ft) – a sorrend megegyezik a bemenetével
+    async estimatePrices(items) {
+      await getModel();
+      const lines = items.map((it, i) => `${i}. ${it.name}${it.qty ? ` – ${it.qty}` : ""}`).join("\n");
+      const res = await priceModel.generateContent(`Tételek:\n${lines}`);
+      const out = parseJsonLoose(res.response.text()).prices || [];
+      return items.map((_, i) => { const f = out.find((x) => +x.i === i); return f && +f.price > 0 ? { price: Math.round(+f.price), assumed: String(f.assumed || "").slice(0, 30) } : null; });
+    },
     async addCooking(id, r) {
       const ref = fs.doc(cookRef(id));
       fs.setDoc(ref, { ...r, createdAt: fs.serverTimestamp() }).catch((e) => { console.error(e); toast("Nem sikerült elmenteni a receptet a Főzés fülre."); });
@@ -708,6 +744,8 @@ function renderSub() {
 
 /* Lista */
 const ICON_CHECK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>`;
+const ICON_CALC = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="2.5" width="15" height="19" rx="3"/><rect x="7.5" y="5.5" width="9" height="4" rx="1"/><path d="M8.5 13h.01M12 13h.01M15.5 13h.01M8.5 16.5h.01M12 16.5h.01M15.5 16.5h.01"/></svg>`;
+const ICON_PLUS_SM = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg>`;
 const ICON_X = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>`;
 
 function itemHTML(it, fresh) {
@@ -718,12 +756,96 @@ function itemHTML(it, fresh) {
   return `<li class="item${it.done ? " done" : ""}${fresh ? " fresh" : ""}" data-id="${esc(it.id)}">
     <button class="check" data-act="toggle" aria-pressed="${!!it.done}" aria-label="${it.done ? "Visszarakás a listára" : "Megvettem"}: ${esc(it.name)}">${ICON_CHECK}</button>
     <div class="item-main">
-      <div class="item-line"><span class="item-name">${esc(it.name)}</span>${it.qty ? `<span class="item-qty">${esc(it.qty)}</span>` : ""}</div>
+      <div class="item-line"><span class="item-name">${esc(it.name)}</span>${it.qty ? `<span class="item-qty">${esc(it.qty)}</span>` : ""}${hasPrice(it) ? `<span class="item-price" title="Becsült ár${it.priceAssumed ? ` (${esc(it.priceAssumed)})` : ""}">~${fmtFt(it.price)}</span>` : ""}</div>
       ${meta ? `<div class="item-meta">${meta}</div>` : ""}
     </div>
-    <button class="del" data-act="del" aria-label="Törlés: ${esc(it.name)}">${ICON_X}</button>
+    ${it.done ? "" : `<button class="more" data-act="more" aria-label="Még több: ${esc(it.name)}">${ICON_PLUS_SM}</button>`}
+    <button class="del" data-act="del" aria-label="Törlés: ${esc(it.name)}">${ICON_TRASH}</button>
   </li>`;
 }
+
+/* ---------- Becsült árak ---------- */
+const fmtFt = (n) => `${Math.round(n).toLocaleString("hu-HU")} Ft`;
+const hasPrice = (it) => +it.price > 0 && (it.priceFor || "") === (it.qty || "");
+function fmtWhen(ts) {
+  if (!ts) return "";
+  const d = new Date(ts), now = new Date();
+  const hm = d.toLocaleTimeString("hu-HU", { hour: "2-digit", minute: "2-digit" });
+  const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(now) - day(d)) / 864e5);
+  return diff === 0 ? `ma ${hm}` : diff === 1 ? `tegnap ${hm}` : `${d.toLocaleDateString("hu-HU", { month: "short", day: "numeric" })} ${hm}`;
+}
+function priceCardHTML() {
+  const items = state.items;
+  const priced = items.filter(hasPrice);
+  const missing = items.length - priced.length;
+  const total = priced.reduce((s, it) => s + +it.price, 0);
+  const L = state.list || {};
+  let title, sub;
+  if (state.pricing) {
+    title = priced.length ? `Kosár kb. ${fmtFt(total)}` : "Árak lekérése…";
+    sub = `<span class="pc-live"><i></i>Lekérem a becsült árakat ${state.pricing} tételre…</span>`;
+  } else if (!priced.length) {
+    title = "Mennyibe kerül a kosár?";
+    sub = "Koppints a számológépre, és megbecsülöm a tételek árát.";
+  } else {
+    title = `Kosár kb. ${fmtFt(total)}`;
+    sub = `Becsült ár · frissítve: ${esc(fmtWhen(L.pricesAt))}${L.pricesBy ? ` (${esc(L.pricesBy)})` : ""}${missing ? ` · <b class="pc-miss">${missing} tételnek nincs friss ára</b>` : ""}`;
+  }
+  return `<div class="price-card${state.pricing ? " busy" : ""}" aria-live="polite">
+    <div class="pc-text"><b>${title}</b><small>${sub}</small></div>
+    <button class="price-btn" data-act="prices" ${state.pricing ? "disabled" : ""} aria-label="Árak frissítése">${ICON_CALC}<span>${state.pricing ? "Lekérés…" : priced.length ? "Frissítés" : "Árak"}</span></button>
+  </div>`;
+}
+async function updatePrices() {
+  if (state.pricing || !backend.estimatePrices) return;
+  const items = state.items.slice(0, 80);
+  if (!items.length) return;
+  state.pricing = items.length; renderItems();
+  try {
+    const prices = await backend.estimatePrices(items.map((it) => ({ name: it.name, qty: it.qty || "" })));
+    const now = Date.now();
+    const patches = [];
+    items.forEach((it, i) => { const p = prices[i]; if (p) patches.push({ id: it.id, patch: { price: p.price, priceFor: it.qty || "", priceAssumed: p.assumed || "", priceAt: now } }); });
+    // azonnal megjelenítjük, a mentés a háttérben megy
+    patches.forEach(({ id, patch }) => Object.assign(state.items.find((x) => x.id === id) || {}, patch));
+    state.list = { ...(state.list || {}), pricesAt: now, pricesBy: me.name };
+    state.pricing = 0; renderItems();
+    await backend.updateItems(state.listId, patches, { pricesAt: now, pricesBy: me.name });
+    const total = state.items.filter(hasPrice).reduce((s, it) => s + +it.price, 0);
+    toast(`Árak frissítve: a kosár kb. ${fmtFt(total)}`, null, "info");
+  } catch (err) {
+    console.error(err);
+    state.pricing = 0; renderItems();
+    toast("Most nem sikerült lekérni az árakat. Próbáld újra." + errDetail(err));
+  }
+}
+
+/* ---------- Még több egy tételből ---------- */
+const moreSheet = $("#more-sheet");
+function openMore(it) {
+  state.moreId = it.id;
+  $("#more-title").textContent = `Még ${it.name}`;
+  $("#more-now").textContent = it.qty ? `Most a listán: ${it.qty}` : "Most mennyiség nélkül van a listán.";
+  $("#more-chips").innerHTML = qtySteps(it.qty).map((q) => `<button type="button" data-q="${esc(q)}">+ ${esc(q)}</button>`).join("");
+  $("#more-q").value = "";
+  moreSheet.showModal();
+}
+async function addMore(extra) {
+  const it = state.items.find((x) => x.id === state.moreId);
+  extra = String(extra || "").trim();
+  if (!it || !extra) return;
+  const qty = addQty(it.qty, extra).slice(0, 30);
+  moreSheet.close();
+  try {
+    const before = it.qty || "";
+    await backend.updateItem(state.listId, it.id, { qty });
+    toast(`${it.name}: ${before ? `${before} → ` : ""}${qty}`, { label: "Visszavonás", run: () => backend.updateItem(state.listId, it.id, { qty: before }).catch(() => {}) });
+  } catch (err) { console.error(err); toast("Nem sikerült menteni. Próbáld újra."); }
+}
+$("#more-chips").addEventListener("click", (e) => { const b = e.target.closest("[data-q]"); if (b) addMore(b.dataset.q); });
+$("#more-form").addEventListener("submit", (e) => { e.preventDefault(); addMore($("#more-q").value); });
+$("#more-cancel").addEventListener("click", () => moreSheet.close());
 
 const EMPTY_ART = `<svg class="empty-art" viewBox="0 0 160 110" aria-hidden="true">
   <circle cx="58" cy="40" r="17" fill="hsl(6 85% 62%)"/><path d="M58 23c2-6 7-8 11-7-1 5-5 8-11 7Z" fill="hsl(135 55% 45%)"/>
@@ -752,7 +874,7 @@ function renderItems() {
     html += `<section class="group basket"><h2><span class="cat-ic">${ICON_BASKET}</span><span class="cat-name">Már a kosárban</span><span class="n">${done.length}</span><button class="link-btn" data-act="clear-done" aria-label="Kipipált tételek törlése">Kiürítés</button></h2>
       <ul class="items">${done.map((it) => itemHTML(it, false)).join("")}</ul></section>`;
   }
-  $("#groups").innerHTML = html;
+  $("#groups").innerHTML = (state.items.length ? priceCardHTML() : "") + html;
   state.items.forEach((i) => state.seen.add(i.id));
   state.firstLoad = false;
   renderSub();
@@ -764,6 +886,7 @@ $("#groups").addEventListener("click", async (e) => {
   if (notReady()) return;
   const act = btn.dataset.act;
   try {
+    if (act === "prices") return updatePrices();
     if (act === "clear-done") {
       const ids = state.items.filter((i) => i.done).map((i) => i.id);
       if (ids.length) { await backend.deleteItems(state.listId, ids); toast(`${ids.length} tétel törölve`); }
@@ -773,6 +896,7 @@ $("#groups").addEventListener("click", async (e) => {
     const it = state.items.find((x) => x.id === id); if (!it) return;
     if (act === "toggle") await backend.updateItem(state.listId, id, { done: !it.done, doneBy: !it.done ? me.name : "" });
     if (act === "del") await backend.deleteItems(state.listId, [id]);
+    if (act === "more") openMore(it);
   } catch (err) { console.error(err); toast("Nem sikerült menteni. Próbáld újra."); }
 });
 
@@ -904,7 +1028,18 @@ async function addParsed(list, { text, spoken }) {
   for (const it of list) {
     const name = String(it.name || "").trim().slice(0, 100);
     if (!name) continue;
-    if (existing.has(norm(name))) { dup.push(name); continue; }
+    if (existing.has(norm(name))) {
+      const cur = openItems().find((x) => norm(x.name) === norm(name));
+      const extra = String(it.qty || "").trim();
+      if (cur && extra) { // már a listán van: hozzáadjuk a mennyiséget
+        const before = cur.qty || "";
+        const qty = addQty(before, extra).slice(0, 30);
+        backend.updateItem(state.listId, cur.id, { qty }).catch((e) => console.error(e));
+        toast(`${cur.name}: ${before ? `${before} → ` : ""}${qty}`, { label: "Visszavonás", run: () => backend.updateItem(state.listId, cur.id, { qty: before }).catch(() => {}) });
+        setHeard(text, `${cur.name}: ${qty}`);
+      } else dup.push(name);
+      continue;
+    }
     existing.add(norm(name));
     items.push({ name, qty: String(it.qty || "").slice(0, 30), category: CATS.includes(it.category) ? it.category : guessCategory(name), done: false, by: me.name });
   }
@@ -1088,7 +1223,7 @@ async function runSuggest(prompt, { spoken = false, fromSearch = false, title = 
   renderAiFav();
   state.suggestion = null;
   $("#ai-title").textContent = title || (url ? `${siteOf(url) || "Recept"} recept` : state.recipe.prompt.replace(/^./, (c) => c.toUpperCase()));
-  ["#ai-loading", "#ai-list", "#ai-note", "#ai-hint", "#ai-q", "#ai-source", "#ai-servings", "#ai-gsearch"].forEach((s) => ($(s).hidden = true));
+  ["#ai-loading", "#ai-list", "#ai-note", "#ai-hint", "#ai-q", "#ai-source", "#ai-servings", "#ai-gsearch", "#ai-cost"].forEach((s) => ($(s).hidden = true));
   $("#ai-add").disabled = true; $("#ai-add").textContent = "Hozzáadás"; $("#ai-view").disabled = true;
   if (!aiSheet.open) aiSheet.showModal();
   // Mindig megkérdezzük, hány főre (kivéve ha már elhangzott: „lecsó 4 főre”)
@@ -1170,9 +1305,10 @@ async function fetchRecipe() {
       const tag = already ? "már a listán" : it.staple ? "általában otthon van" : (it.category || "");
       return `<li class="${gl ? "has-gluten" : ""}"><label><input type="checkbox" data-i="${i}" ${checked ? "checked" : ""}>
         <span><span class="nm">${esc(it.name)}</span><br>${gl ? `<span class="tag warn">Glutént tartalmaz!</span>` : `<span class="tag">${esc(tag)}</span>`}</span>
-        <span class="qty">${esc(it.qty || "")}</span></label></li>`;
+        <span class="qty">${esc(it.qty || "")}${+it.price > 0 ? `<small class="ing-price">~${fmtFt(it.price)}</small>` : ""}</span></label></li>`;
     }).join("");
     $("#ai-list").hidden = false;
+    renderRecipeCost();
     const glN = settings.glutenFree ? res.items.filter((it) => it.gluten === true || hasGluten(it.name)).length : 0;
     $("#ai-hint").textContent = glN
       ? `Glutén nélkül szűrő: ${glN} glutént tartalmazó hozzávalót nem jelöltem be. Helyette gluténmentes változatot érdemes venni. Az otthon lévő alapokat és a listán szereplőket sem jelöltem be.`
@@ -1193,6 +1329,42 @@ async function fetchRecipe() {
     $("#ai-note").hidden = false;
   }
 }
+function renderRecipeCost() {
+  const s = state.suggestion; const el = $("#ai-cost");
+  if (!s?.items?.length) { el.hidden = true; return; }
+  const n = s.servings || state.recipe?.servings || 4;
+  let title, sub;
+  if (s.costLoading) { title = "Költség számítása…"; sub = `<span class="pc-live"><i></i>Lekérem a hozzávalók becsült árát ${n} főre…</span>`; }
+  else if (s.cost) {
+    title = `Kb. ${fmtFt(s.cost)} ${n} főre`;
+    sub = `kb. ${fmtFt(s.cost / n)}/fő · becsült ár · ${esc(fmtWhen(s.costAt))}${s.costBuy && s.costBuy < s.cost ? ` · amit venni kell: kb. ${fmtFt(s.costBuy)}` : ""}`;
+  } else { title = "Mennyibe kerül?"; sub = `Koppints a számológépre, és megbecsülöm az étel árát ${n} főre.`; }
+  el.innerHTML = `<div class="pc-text"><b>${title}</b><small>${sub}</small></div>
+    <button class="price-btn" type="button" id="ai-cost-btn" ${s.costLoading ? "disabled" : ""} aria-label="Költség kiszámítása">${ICON_CALC}<span>${s.costLoading ? "Lekérés…" : s.cost ? "Frissítés" : "Kalkuláció"}</span></button>`;
+  el.classList.toggle("busy", !!s.costLoading);
+  el.hidden = false;
+}
+$("#ai-cost").addEventListener("click", async (e) => {
+  if (!e.target.closest("#ai-cost-btn")) return;
+  const s = state.suggestion; if (!s?.items?.length || s.costLoading || !backend.estimatePrices) return;
+  s.costLoading = true; renderRecipeCost();
+  try {
+    const prices = await backend.estimatePrices(s.items.map((it) => ({ name: it.name, qty: it.qty || "" })));
+    s.items.forEach((it, i) => { it.price = prices[i]?.price || 0; });
+    s.cost = s.items.reduce((t, it) => t + (+it.price || 0), 0);
+    const checked = [...$("#ai-list").querySelectorAll("input:checked")].map((x) => +x.dataset.i);
+    s.costBuy = checked.reduce((t, i) => t + (+s.items[i]?.price || 0), 0);
+    s.costAt = Date.now();
+    // árak a hozzávalók mellé is
+    $("#ai-list").querySelectorAll("li").forEach((li, i) => {
+      const q = li.querySelector(".qty"); if (!q) return;
+      q.querySelector(".ing-price")?.remove();
+      if (+s.items[i]?.price > 0) q.insertAdjacentHTML("beforeend", `<small class="ing-price">~${fmtFt(s.items[i].price)}</small>`);
+    });
+  } catch (err) { console.error(err); toast("Most nem sikerült kiszámolni a költséget. Próbáld újra." + errDetail(err)); }
+  s.costLoading = false;
+  if (state.suggestion === s) renderRecipeCost();
+});
 function updateAddCount() {
   $("#ai-view").disabled = !state.suggestion?.items?.length;
   $("#ai-view").textContent = "Recept megnézése";
