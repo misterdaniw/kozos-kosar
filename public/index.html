@@ -576,7 +576,13 @@ dialog.step-mode::backdrop { background: var(--bg); }
 }
 .step-top { display: flex; align-items: center; gap: 10px; }
 .step-head { flex: 1; min-width: 0; display: grid; gap: 4px; justify-items: start; }
-.step-head strong { font: 700 20px/1.2 var(--f-display); overflow-wrap: anywhere; }
+.step-head strong { font: 700 15px/1.25 var(--f-display); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.step-meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.step-time { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 700; color: var(--soft-ink); }
+.step-time svg { width: 15px; height: 15px; }
+.step-main { touch-action: pan-y; transition: transform .22s ease-out; }
+.step-main.slide-from-right { animation: slideFromRight .26s ease-out; }
+.step-main.slide-from-left { animation: slideFromLeft .26s ease-out; }
 .step-voice { width: 48px; height: 48px; border-radius: 50%; border: 0; background: var(--surface); color: var(--ink); display: grid; place-items: center; flex: none; box-shadow: var(--shadow); }
 .step-voice svg { width: 22px; height: 22px; }
 .step-progress { display: grid; gap: 6px; font: 600 15px/1 var(--f-display); color: var(--muted); }
@@ -821,7 +827,7 @@ body { overflow-x: hidden; }
       <div class="step-head"><strong id="step-title"></strong><span id="step-src"></span></div>
       <button type="button" class="step-voice" id="step-voice" aria-pressed="false" aria-label="Hangvezérlés: tovább, vissza, ismételd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5v4"/></svg></button>
     </div>
-    <div class="step-progress"><span id="step-count"></span><div class="bar"><i id="step-bar"></i></div></div>
+    <div class="step-progress"><div class="step-meta"><span id="step-count"></span><span class="step-time" id="step-time" hidden></span></div><div class="bar"><i id="step-bar"></i></div></div>
     <div class="step-main">
       <div id="step-img"></div>
       <p id="step-text" aria-live="polite"></p>

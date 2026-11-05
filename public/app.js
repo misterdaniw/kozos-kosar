@@ -76,7 +76,7 @@ Szabályok:
 - gluten=true minden hozzávalóra, amely búzát, árpát vagy rozsot tartalmaz, különben false.
 - A kategória a megadott listából legyen.
 - title: rövid cím, pl. "Lecsó, 4 adag".
-- steps: MINDIG add meg az elkészítés lépéseit saját szavaiddal (5-12 lépés, mindegyik 1-3 mondat), a megadott létszámra. Minden lépésben nevezd meg pontosan, melyik hozzávalót és fűszert, mennyit és mikor kell hozzáadni (pl. "Húzd le a tűzről, szórd rá a 2 ek pirospaprikát, keverd el, majd add hozzá a húst."). Minden fűszer és ízesítő szerepeljen legalább egy lépésben, a megfelelő pillanatban. A lépés uses mezőjébe sorold fel az abban a lépésben felhasznált hozzávalókat és fűszereket mennyiséggel (pl. ["2 ek őrölt pirospaprika", "1 tk só"]); ha nincs ilyen, legyen üres. minutes: a teljes elkészítési idő percben.
+- steps: MINDIG add meg az elkészítés lépéseit saját szavaiddal (5-12 lépés, mindegyik 1-3 mondat), a megadott létszámra. Minden lépésben nevezd meg pontosan, melyik hozzávalót és fűszert, mennyit és mikor kell hozzáadni (pl. "Húzd le a tűzről, szórd rá a 2 ek pirospaprikát, keverd el, majd add hozzá a húst."). Minden fűszer és ízesítő szerepeljen legalább egy lépésben, a megfelelő pillanatban. A lépés minutes mezője a lépés becsült ideje percben (pl. pirítás 5, párolás 40; gyors műveletnél 1-2), a lépések ideje összesen nagyjából adja ki a teljes elkészítési időt. A lépés uses mezőjébe sorold fel az abban a lépésben felhasznált hozzávalókat és fűszereket mennyiséggel (pl. ["2 ek őrölt pirospaprika", "1 tk só"]); ha nincs ilyen, legyen üres. minutes: a teljes elkészítési idő percben.
 - Ha a kérés nem egyértelmű, és a válasz lényegesen megváltoztatná a listát (pl. "valami vacsorát" vagy "sütit" – milyet?), adj vissza üres items listát, és a question mezőben kérdezz vissza röviden, az options mezőben 2-4 rövid válaszlehetőséggel. Apróságon (adagszám hiánya, márka) ne kérdezz.
 - Ha a kérés nem értelmezhető ételként vagy bevásárlásként, adj vissza üres items listát, és a note mezőben röviden írd le, mit vársz.`;
 
@@ -100,12 +100,12 @@ Szabályok:
 - FŰSZEREK RÉSZLETESEN: minden fűszert, fűszernövényt és ízesítőt külön tételként, pontos, a recepthez szükséges mennyiséggel adj meg (pl. "őrölt pirospaprika" 2 ek, "só" 1,5 tk, "őrölt fekete bors" ½ tk, "őrölt kömény" 1 tk, "szárított majoránna" 1 tk, "babérlevél" 2 db, "fokhagyma" 3 gerezd, "cukor" 1 csipet). Soha ne írj összevontan "fűszerek", "ízlés szerint" vagy mennyiség nélküli fűszert. A sütéshez-főzéshez kellő zsiradékot (olaj, vaj, zsír) és a habarást (liszt, tejföl) is mennyiséggel add meg.
 - staple=true azokra, amik a legtöbb háztartásban általában otthon vannak (só, bors, olaj, cukor, liszt, ecet, szárított és őrölt fűszerek, pirospaprika, babérlevél, ételízesítő). Ezeket a felhasználó csak ellenőrzi, hogy van-e otthon, ezért a mennyiségük a receptben felhasznált mennyiség legyen (ek, tk, csipet, g), ne bolti kiszerelés. Friss fűszernövény, fokhagyma, tejföl, vaj és hasonlók staple=false. Vizet ne adj vissza.
 - gluten=true minden hozzávalóra, amely búzát, árpát vagy rozsot tartalmaz (pl. liszt, zsemlemorzsa, tészta, kenyér, sör), különben false.
-- steps: az elkészítés lépései az oldal alapján, saját szavaiddal, tömören (legfeljebb 12 lépés, mindegyik 1-3 mondat), az eredeti sorrendben, a megadott létszámhoz igazítva. Minden lépésben nevezd meg pontosan, melyik hozzávalót és fűszert, mennyit és mikor kell hozzáadni (pl. "Húzd le a tűzről, szórd rá a 2 ek pirospaprikát, keverd el, majd add hozzá a húst."). Minden fűszer és ízesítő szerepeljen legalább egy lépésben, a megfelelő pillanatban. A lépés uses mezőjébe sorold fel az abban a lépésben felhasznált hozzávalókat és fűszereket mennyiséggel (pl. ["2 ek őrölt pirospaprika", "1 tk só"]); ha nincs ilyen, legyen üres. Lépésekhez ne adj képet.
+- steps: az elkészítés lépései az oldal alapján, saját szavaiddal, tömören (legfeljebb 12 lépés, mindegyik 1-3 mondat), az eredeti sorrendben, a megadott létszámhoz igazítva. Minden lépésben nevezd meg pontosan, melyik hozzávalót és fűszert, mennyit és mikor kell hozzáadni (pl. "Húzd le a tűzről, szórd rá a 2 ek pirospaprikát, keverd el, majd add hozzá a húst."). Minden fűszer és ízesítő szerepeljen legalább egy lépésben, a megfelelő pillanatban. A lépés minutes mezője a lépés becsült ideje percben (pl. pirítás 5, párolás 40; gyors műveletnél 1-2), a lépések ideje összesen nagyjából adja ki a teljes elkészítési időt. A lépés uses mezőjébe sorold fel az abban a lépésben felhasznált hozzávalókat és fűszereket mennyiséggel (pl. ["2 ek őrölt pirospaprika", "1 tk só"]); ha nincs ilyen, legyen üres. Lépésekhez ne adj képet.
 - imageUrl: az elkészült étel fő fotójának pontos (https) címe, ahogy az oldalon szerepel (pl. az og:image), különben üres. Ne találj ki képcímet. minutes: a teljes elkészítési idő percben, ha kiderül, különben 0.
 - Ha az oldal nem recept, vagy nem tudtad beolvasni, az items legyen üres, és a note mezőben írd le röviden, mi a gond.
 - Ha az étel neve nagyon különböző recepteket takarhat (pl. "süti", "valami vacsora"), az items legyen üres, és kérdezz vissza: question + 2-4 rövid options.
 Válaszolj kizárólag egyetlen JSON objektummal, más szöveg nélkül, ebben a formában:
-{"title": "Lecsó", "sourceUrl": "https://...", "sourceSite": "Street Kitchen", "originalServings": 4, "minutes": 40, "imageUrl": "https://...", "items": [{"name": "lecsópaprika", "qty": "1 kg", "category": "Zöldség, gyümölcs", "staple": false, "gluten": false}], "steps": [{"text": "A 2 ek olajon üvegesre párold a felkockázott hagymát.", "uses": ["2 ek olaj", "1 fej vöröshagyma"]}], "note": "", "question": "", "options": []}`;
+{"title": "Lecsó", "sourceUrl": "https://...", "sourceSite": "Street Kitchen", "originalServings": 4, "minutes": 40, "imageUrl": "https://...", "items": [{"name": "lecsópaprika", "qty": "1 kg", "category": "Zöldség, gyümölcs", "staple": false, "gluten": false}], "steps": [{"text": "A 2 ek olajon üvegesre párold a felkockázott hagymát.", "minutes": 5, "uses": ["2 ek olaj", "1 fej vöröshagyma"]}], "note": "", "question": "", "options": []}`;
 
 const RECIPE_SEARCH_PROMPT = `Egy magyar család receptkeresője vagy. A felhasználó megad egy alapanyagot, ételtípust vagy hangulatot (pl. "csirke", "gyors vacsora", "leves", "sütemény", "vega").
 Keress hozzá recepteket kizárólag a streetkitchen.hu és a mindmegette.hu oldalon (pl. "csirke recept site:streetkitchen.hu", "csirke recept site:mindmegette.hu"), mindkét oldalról vegyesen.
@@ -133,7 +133,7 @@ function siteOf(url) {
 const httpsUrl = (u) => (typeof u === "string" && /^https:\/\/[^\s"'<>]+$/.test(u.trim()) ? u.trim().slice(0, 600) : "");
 function cleanSteps(steps) {
   return (Array.isArray(steps) ? steps : []).map((x) => (typeof x === "string" ? { text: x } : x || {}))
-    .map((x) => ({ text: String(x.text || "").trim().slice(0, 700), uses: (Array.isArray(x.uses) ? x.uses : []).map((u) => String(u || "").trim().slice(0, 60)).filter(Boolean).slice(0, 12) }))
+    .map((x) => ({ text: String(x.text || "").trim().slice(0, 700), ...(+x.minutes > 0 ? { minutes: Math.min(600, Math.round(+x.minutes)) } : {}), uses: (Array.isArray(x.uses) ? x.uses : []).map((u) => String(u || "").trim().slice(0, 60)).filter(Boolean).slice(0, 12) }))
     .filter((x) => x.text).slice(0, 20);
 }
 // A recept forrásának címkéje – mindig megjelenik a receptnél és a hozzávalóknál
@@ -377,7 +377,7 @@ async function createFirebaseBackend(cfg) {
         question: Schema.string(),
         options: Schema.array({ items: Schema.string() }),
         minutes: Schema.integer(),
-        steps: Schema.array({ items: Schema.object({ properties: { text: Schema.string(), uses: Schema.array({ items: Schema.string() }) }, optionalProperties: ["uses"] }) }),
+        steps: Schema.array({ items: Schema.object({ properties: { text: Schema.string(), minutes: Schema.integer(), uses: Schema.array({ items: Schema.string() }) }, optionalProperties: ["uses", "minutes"] }) }),
         items: Schema.array({
           items: Schema.object({
             properties: {
@@ -2019,6 +2019,10 @@ function renderStep() {
   $("#step-title").textContent = r.title;
   $("#step-src").innerHTML = sourceChip(r.sourceSite, r.sourceUrl);
   $("#step-count").textContent = `${step.i + 1}. lépés / ${n}`;
+  // a lépés ideje / teljes idő (ha ismert)
+  const total = +r.minutes || r.steps.reduce((t, s) => t + (+s.minutes || 0), 0);
+  $("#step-time").innerHTML = total ? `${ICON_CLOCK}<span>${+x.minutes ? `kb. ${x.minutes} perc / ` : ""}${total} perc összesen</span>` : "";
+  $("#step-time").hidden = !total;
   $("#step-bar").style.width = `${((step.i + 1) / n) * 100}%`;
   $("#step-img").innerHTML = recipeImg(dishSrc(r), "step-big-img", r.title);
   $("#step-text").textContent = x.text;
@@ -2029,6 +2033,33 @@ function renderStep() {
   $("#step-voice").classList.toggle("mic-live", voice.wantOn && voice.mode === "steps");
   $("#step-voice").setAttribute("aria-pressed", String(step.voice));
   if (!step.preview) LS.set(stepKey(r), step.i);
+}
+// Lépések lapozása húzással (balra: következő, jobbra: előző)
+{
+  const box = $("#step-sheet"); const main = () => $(".step-main");
+  let sx = 0, sy = 0, dx = 0, on = false, horiz = null;
+  box.addEventListener("touchstart", (e) => {
+    const t = e.touches[0];
+    if (e.touches.length > 1 || e.target.closest("button, a") || t.clientX < 16 || t.clientX > innerWidth - 16) { on = false; return; }
+    on = true; horiz = null; dx = 0; sx = t.clientX; sy = t.clientY;
+  }, { passive: true });
+  box.addEventListener("touchmove", (e) => {
+    if (!on) return;
+    const t = e.touches[0]; dx = t.clientX - sx; const dy = t.clientY - sy;
+    if (horiz === null && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) horiz = Math.abs(dx) > Math.abs(dy) * 1.2;
+    if (!horiz) return;
+    const edge = (dx > 0 && step.i === 0) || (dx < 0 && step.i === step.r.steps.length - 1);
+    main().style.transition = "none";
+    main().style.transform = `translateX(${dx * (edge ? 0.15 : 0.45)}px)`;
+  }, { passive: true });
+  const end = () => {
+    if (!on) return; on = false;
+    const m = main(); m.style.transition = ""; m.style.transform = "";
+    if (!horiz || Math.abs(dx) < 60) return;
+    if (dx < 0) goStep(1);
+    else if (step.i > 0) goStep(-1);
+  };
+  box.addEventListener("touchend", end); box.addEventListener("touchcancel", end);
 }
 function goStep(d) {
   const n = step.r.steps.length;
@@ -2041,8 +2072,10 @@ function goStep(d) {
     } else toast("Jó étvágyat! Ha megfőztétek, törölheted a Főzés fülről.", { label: "Törlés", run: () => deleteCooking(r) }, "ok");
     return;
   }
+  const prevI = step.i;
   step.i = Math.max(0, Math.min(n - 1, step.i + d));
   renderStep();
+  if (step.i !== prevI) { const m = $(".step-main"); m.classList.remove("slide-from-right", "slide-from-left"); void m.offsetWidth; m.classList.add(d > 0 ? "slide-from-right" : "slide-from-left"); }
   if (step.voice) speak(`${step.i + 1}. lépés. ${step.r.steps[step.i].text}${step.r.steps[step.i].uses?.length ? ` Ehhez kell: ${step.r.steps[step.i].uses.join(", ")}.` : ""}`);
 }
 function closeSteps() { if (stepSheet.open) stepSheet.close(); }
