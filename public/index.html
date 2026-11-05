@@ -197,6 +197,15 @@ ul.items { list-style: none; margin: 0; padding: 0 0 6px; }
 .price-btn:disabled { opacity: 1; cursor: progress; }
 .busy .price-btn svg { animation: calcShake .7s ease-in-out infinite; }
 @keyframes calcShake { 25% { transform: rotate(-10deg); } 75% { transform: rotate(10deg); } }
+.pantry-box { display: grid; gap: 8px; padding: 12px; border-radius: 18px; border: 2px dashed var(--line); }
+.pantry-head { display: grid; gap: 2px; }
+.pantry-head b { font: 600 16px/1.2 var(--f-display); }
+.pantry-head small { font-size: 13px; color: var(--muted); font-weight: 600; }
+.uses { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.uses span { font-size: 13px; font-weight: 700; padding: 4px 10px; border-radius: 99px; background: var(--sun-soft); color: var(--ink); }
+.step-uses { justify-content: center; align-items: center; margin-top: 4px; }
+.step-uses b { width: 100%; text-align: center; font-size: 13px; color: var(--muted); }
+.step-uses span { font-size: 15px; padding: 6px 12px; }
 .ing-price { display: block; font-size: 12px; font-weight: 700; color: var(--muted); }
 .more-now { margin: 0; color: var(--muted); font-weight: 600; }
 .more-chips { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -772,6 +781,10 @@ body { overflow-x: hidden; }
     <div id="ai-q" class="qcard flat" hidden></div>
     <div id="ai-gsearch" hidden></div>
     <ul class="suggest-list" id="ai-list" hidden></ul>
+    <div id="ai-pantry" class="pantry-box" hidden>
+      <div class="pantry-head"><b>Nézd meg, van-e otthon</b><small>Fűszerek és alapok – nem kerülnek a listára. Ami nincs otthon, pipáld be.</small></div>
+      <ul class="suggest-list" id="ai-pantry-list"></ul>
+    </div>
     <div id="ai-cost" class="price-card flat" hidden></div>
     <p id="ai-hint" hidden>A már otthon lévő alapokat (só, olaj…) és a listán szereplőket nem jelöltem be.</p>
     <div class="row">
@@ -812,6 +825,7 @@ body { overflow-x: hidden; }
     <div class="step-main">
       <div id="step-img"></div>
       <p id="step-text" aria-live="polite"></p>
+      <div class="uses step-uses" id="step-uses" hidden></div>
     </div>
     <div class="step-nav">
       <button type="button" class="btn ghost" id="step-prev">‹ Előző</button>

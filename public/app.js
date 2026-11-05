@@ -71,11 +71,12 @@ Szabályok:
 - A tétel neve magyarul, boltban szokásos, rövid megnevezés, kisbetűvel (pl. "vöröshagyma", "darált sertéshús", "tejföl").
 - A mennyiség metrikus mértékegységben vagy darabban, boltban kapható kiszerelésre kerekítve (pl. "1 kg", "50 dkg", "2 db", "1 fej", "450 g"). Ha nincs megadva adagszám, 4 adaggal számolj.
 - Ha több ételhez ugyanaz kell, vond össze egy tételbe.
-- staple=true azokra, amik a legtöbb háztartásban általában otthon vannak (só, bors, olaj, cukor, liszt, ecet, alap fűszerek). Vizet ne adj vissza.
+- FŰSZEREK RÉSZLETESEN: minden fűszert, fűszernövényt és ízesítőt külön tételként, pontos, a recepthez szükséges mennyiséggel adj meg (pl. "őrölt pirospaprika" 2 ek, "só" 1,5 tk, "őrölt fekete bors" ½ tk, "őrölt kömény" 1 tk, "szárított majoránna" 1 tk, "babérlevél" 2 db, "fokhagyma" 3 gerezd, "cukor" 1 csipet). Soha ne írj összevontan "fűszerek", "ízlés szerint" vagy mennyiség nélküli fűszert. A sütéshez-főzéshez kellő zsiradékot (olaj, vaj, zsír) és a habarást (liszt, tejföl) is mennyiséggel add meg.
+- staple=true azokra, amik a legtöbb háztartásban általában otthon vannak (só, bors, olaj, cukor, liszt, ecet, szárított és őrölt fűszerek, pirospaprika, babérlevél, ételízesítő). Ezeket a felhasználó csak ellenőrzi, hogy van-e otthon, ezért a mennyiségük a receptben felhasznált mennyiség legyen (ek, tk, csipet, g), ne bolti kiszerelés. Friss fűszernövény, fokhagyma, tejföl, vaj és hasonlók staple=false. Vizet ne adj vissza.
 - gluten=true minden hozzávalóra, amely búzát, árpát vagy rozsot tartalmaz, különben false.
 - A kategória a megadott listából legyen.
 - title: rövid cím, pl. "Lecsó, 4 adag".
-- steps: MINDIG add meg az elkészítés lépéseit röviden, saját szavaiddal (4-10 lépés, mindegyik 1-3 mondat), a megadott létszámra. minutes: a teljes elkészítési idő percben.
+- steps: MINDIG add meg az elkészítés lépéseit saját szavaiddal (5-12 lépés, mindegyik 1-3 mondat), a megadott létszámra. Minden lépésben nevezd meg pontosan, melyik hozzávalót és fűszert, mennyit és mikor kell hozzáadni (pl. "Húzd le a tűzről, szórd rá a 2 ek pirospaprikát, keverd el, majd add hozzá a húst."). Minden fűszer és ízesítő szerepeljen legalább egy lépésben, a megfelelő pillanatban. A lépés uses mezőjébe sorold fel az abban a lépésben felhasznált hozzávalókat és fűszereket mennyiséggel (pl. ["2 ek őrölt pirospaprika", "1 tk só"]); ha nincs ilyen, legyen üres. minutes: a teljes elkészítési idő percben.
 - Ha a kérés nem egyértelmű, és a válasz lényegesen megváltoztatná a listát (pl. "valami vacsorát" vagy "sütit" – milyet?), adj vissza üres items listát, és a question mezőben kérdezz vissza röviden, az options mezőben 2-4 rövid válaszlehetőséggel. Apróságon (adagszám hiánya, márka) ne kérdezz.
 - Ha a kérés nem értelmezhető ételként vagy bevásárlásként, adj vissza üres items listát, és a note mezőben röviden írd le, mit vársz.`;
 
@@ -96,14 +97,15 @@ Szabályok:
 - Ha csak az étel nevét kapod, keress hozzá receptet kizárólag a streetkitchen.hu vagy a mindmegette.hu oldalon (pl. "lecsó recept site:streetkitchen.hu"), válaszd a kérésnek legjobban megfelelőt, olvasd be az oldalát, és abból dolgozz.
 - Állapítsd meg, hány főre vagy adagra szól az eredeti recept (originalServings; ha nem derül ki, 4), és számold át a mennyiségeket a megadott létszámra, boltban kapható kiszerelésre kerekítve.
 - name: rövid, boltban szokásos név kisbetűvel. qty: az átszámolt mennyiség. category ezek egyike: ${CATS.join(" | ")}.
-- staple=true azokra, amik a legtöbb háztartásban általában otthon vannak (só, bors, olaj, cukor, liszt, alap fűszerek). Vizet ne adj vissza.
+- FŰSZEREK RÉSZLETESEN: minden fűszert, fűszernövényt és ízesítőt külön tételként, pontos, a recepthez szükséges mennyiséggel adj meg (pl. "őrölt pirospaprika" 2 ek, "só" 1,5 tk, "őrölt fekete bors" ½ tk, "őrölt kömény" 1 tk, "szárított majoránna" 1 tk, "babérlevél" 2 db, "fokhagyma" 3 gerezd, "cukor" 1 csipet). Soha ne írj összevontan "fűszerek", "ízlés szerint" vagy mennyiség nélküli fűszert. A sütéshez-főzéshez kellő zsiradékot (olaj, vaj, zsír) és a habarást (liszt, tejföl) is mennyiséggel add meg.
+- staple=true azokra, amik a legtöbb háztartásban általában otthon vannak (só, bors, olaj, cukor, liszt, ecet, szárított és őrölt fűszerek, pirospaprika, babérlevél, ételízesítő). Ezeket a felhasználó csak ellenőrzi, hogy van-e otthon, ezért a mennyiségük a receptben felhasznált mennyiség legyen (ek, tk, csipet, g), ne bolti kiszerelés. Friss fűszernövény, fokhagyma, tejföl, vaj és hasonlók staple=false. Vizet ne adj vissza.
 - gluten=true minden hozzávalóra, amely búzát, árpát vagy rozsot tartalmaz (pl. liszt, zsemlemorzsa, tészta, kenyér, sör), különben false.
-- steps: az elkészítés lépései az oldal alapján, saját szavaiddal, tömören (legfeljebb 12 lépés, mindegyik 1-3 mondat), az eredeti sorrendben, a megadott létszámhoz igazítva. Lépésekhez ne adj képet.
+- steps: az elkészítés lépései az oldal alapján, saját szavaiddal, tömören (legfeljebb 12 lépés, mindegyik 1-3 mondat), az eredeti sorrendben, a megadott létszámhoz igazítva. Minden lépésben nevezd meg pontosan, melyik hozzávalót és fűszert, mennyit és mikor kell hozzáadni (pl. "Húzd le a tűzről, szórd rá a 2 ek pirospaprikát, keverd el, majd add hozzá a húst."). Minden fűszer és ízesítő szerepeljen legalább egy lépésben, a megfelelő pillanatban. A lépés uses mezőjébe sorold fel az abban a lépésben felhasznált hozzávalókat és fűszereket mennyiséggel (pl. ["2 ek őrölt pirospaprika", "1 tk só"]); ha nincs ilyen, legyen üres. Lépésekhez ne adj képet.
 - imageUrl: az elkészült étel fő fotójának pontos (https) címe, ahogy az oldalon szerepel (pl. az og:image), különben üres. Ne találj ki képcímet. minutes: a teljes elkészítési idő percben, ha kiderül, különben 0.
 - Ha az oldal nem recept, vagy nem tudtad beolvasni, az items legyen üres, és a note mezőben írd le röviden, mi a gond.
 - Ha az étel neve nagyon különböző recepteket takarhat (pl. "süti", "valami vacsora"), az items legyen üres, és kérdezz vissza: question + 2-4 rövid options.
 Válaszolj kizárólag egyetlen JSON objektummal, más szöveg nélkül, ebben a formában:
-{"title": "Lecsó", "sourceUrl": "https://...", "sourceSite": "Street Kitchen", "originalServings": 4, "minutes": 40, "imageUrl": "https://...", "items": [{"name": "lecsópaprika", "qty": "1 kg", "category": "Zöldség, gyümölcs", "staple": false, "gluten": false}], "steps": [{"text": "A hagymát apróra vágjuk, és az olajon üvegesre pároljuk."}], "note": "", "question": "", "options": []}`;
+{"title": "Lecsó", "sourceUrl": "https://...", "sourceSite": "Street Kitchen", "originalServings": 4, "minutes": 40, "imageUrl": "https://...", "items": [{"name": "lecsópaprika", "qty": "1 kg", "category": "Zöldség, gyümölcs", "staple": false, "gluten": false}], "steps": [{"text": "A 2 ek olajon üvegesre párold a felkockázott hagymát.", "uses": ["2 ek olaj", "1 fej vöröshagyma"]}], "note": "", "question": "", "options": []}`;
 
 const RECIPE_SEARCH_PROMPT = `Egy magyar család receptkeresője vagy. A felhasználó megad egy alapanyagot, ételtípust vagy hangulatot (pl. "csirke", "gyors vacsora", "leves", "sütemény", "vega").
 Keress hozzá recepteket kizárólag a streetkitchen.hu és a mindmegette.hu oldalon (pl. "csirke recept site:streetkitchen.hu", "csirke recept site:mindmegette.hu"), mindkét oldalról vegyesen.
@@ -131,7 +133,8 @@ function siteOf(url) {
 const httpsUrl = (u) => (typeof u === "string" && /^https:\/\/[^\s"'<>]+$/.test(u.trim()) ? u.trim().slice(0, 600) : "");
 function cleanSteps(steps) {
   return (Array.isArray(steps) ? steps : []).map((x) => (typeof x === "string" ? { text: x } : x || {}))
-    .map((x) => ({ text: String(x.text || "").trim().slice(0, 700) })).filter((x) => x.text).slice(0, 20);
+    .map((x) => ({ text: String(x.text || "").trim().slice(0, 700), uses: (Array.isArray(x.uses) ? x.uses : []).map((u) => String(u || "").trim().slice(0, 60)).filter(Boolean).slice(0, 12) }))
+    .filter((x) => x.text).slice(0, 20);
 }
 // A recept forrásának címkéje – mindig megjelenik a receptnél és a hozzávalóknál
 function sourceLabel(sugg) {
@@ -374,7 +377,7 @@ async function createFirebaseBackend(cfg) {
         question: Schema.string(),
         options: Schema.array({ items: Schema.string() }),
         minutes: Schema.integer(),
-        steps: Schema.array({ items: Schema.object({ properties: { text: Schema.string() } }) }),
+        steps: Schema.array({ items: Schema.object({ properties: { text: Schema.string(), uses: Schema.array({ items: Schema.string() }) }, optionalProperties: ["uses"] }) }),
         items: Schema.array({
           items: Schema.object({
             properties: {
@@ -1223,7 +1226,7 @@ async function runSuggest(prompt, { spoken = false, fromSearch = false, title = 
   renderAiFav();
   state.suggestion = null;
   $("#ai-title").textContent = title || (url ? `${siteOf(url) || "Recept"} recept` : state.recipe.prompt.replace(/^./, (c) => c.toUpperCase()));
-  ["#ai-loading", "#ai-list", "#ai-note", "#ai-hint", "#ai-q", "#ai-source", "#ai-servings", "#ai-gsearch", "#ai-cost"].forEach((s) => ($(s).hidden = true));
+  ["#ai-loading", "#ai-list", "#ai-note", "#ai-hint", "#ai-q", "#ai-source", "#ai-servings", "#ai-gsearch", "#ai-cost", "#ai-pantry"].forEach((s) => ($(s).hidden = true));
   $("#ai-add").disabled = true; $("#ai-add").textContent = "Hozzáadás"; $("#ai-view").disabled = true;
   if (!aiSheet.open) aiSheet.showModal();
   // Mindig megkérdezzük, hány főre (kivéve ha már elhangzott: „lecsó 4 főre”)
@@ -1298,23 +1301,29 @@ async function fetchRecipe() {
       if (SR && R.spoken) { if (!voice.wantOn) startListening({ mode: "aiq" }); else voice.mode = "aiq"; speak(`${res.question} ${res.options.map((o, i) => `${i + 1}: ${o}`).join(", ")}.`); }
     }
     if (!res.items.length) return;
-    $("#ai-list").innerHTML = res.items.map((it, i) => {
+    const ingLi = (it, i) => {
       const already = onList.has(norm(it.name));
       const gl = settings.glutenFree && (it.gluten === true || hasGluten(it.name));
       const checked = !it.staple && !already && !gl;
-      const tag = already ? "már a listán" : it.staple ? "általában otthon van" : (it.category || "");
-      return `<li class="${gl ? "has-gluten" : ""}"><label><input type="checkbox" data-i="${i}" ${checked ? "checked" : ""}>
+      const tag = already ? "már a listán" : (it.category || "");
+      return `<li data-i="${i}" class="${gl ? "has-gluten" : ""}"><label><input type="checkbox" data-i="${i}" ${checked ? "checked" : ""}>
         <span><span class="nm">${esc(it.name)}</span><br>${gl ? `<span class="tag warn">Glutént tartalmaz!</span>` : `<span class="tag">${esc(tag)}</span>`}</span>
         <span class="qty">${esc(it.qty || "")}${+it.price > 0 ? `<small class="ing-price">~${fmtFt(it.price)}</small>` : ""}</span></label></li>`;
-    }).join("");
-    $("#ai-list").hidden = false;
+    };
+    // Megvenni való hozzávalók / otthonról: csak ellenőrizni kell, nem kerülnek a listára (hacsak be nem pipálod)
+    const buy = res.items.map((it, i) => [it, i]).filter(([it]) => !it.staple);
+    const pantry = res.items.map((it, i) => [it, i]).filter(([it]) => it.staple);
+    $("#ai-list").innerHTML = buy.map(([it, i]) => ingLi(it, i)).join("");
+    $("#ai-pantry-list").innerHTML = pantry.map(([it, i]) => ingLi(it, i)).join("");
+    $("#ai-pantry").hidden = !pantry.length;
+    $("#ai-list").hidden = !buy.length;
     renderRecipeCost();
     const glN = settings.glutenFree ? res.items.filter((it) => it.gluten === true || hasGluten(it.name)).length : 0;
     $("#ai-hint").textContent = glN
       ? `Glutén nélkül szűrő: ${glN} glutént tartalmazó hozzávalót nem jelöltem be. Helyette gluténmentes változatot érdemes venni. Az otthon lévő alapokat és a listán szereplőket sem jelöltem be.`
-      : "A már otthon lévő alapokat (só, olaj…) és a listán szereplőket nem jelöltem be.";
+      : "A listán már szereplő hozzávalókat nem jelöltem be.";
     $("#ai-hint").classList.toggle("warn-hint", glN > 0);
-    $("#ai-hint").hidden = !glN && !res.items.some((it) => it.staple || onList.has(norm(it.name)));
+    $("#ai-hint").hidden = !glN && !res.items.some((it) => !it.staple && onList.has(norm(it.name)));
     updateAddCount();
   } catch (err) {
     console.error(err);
@@ -1352,12 +1361,12 @@ $("#ai-cost").addEventListener("click", async (e) => {
     const prices = await backend.estimatePrices(s.items.map((it) => ({ name: it.name, qty: it.qty || "" })));
     s.items.forEach((it, i) => { it.price = prices[i]?.price || 0; });
     s.cost = s.items.reduce((t, it) => t + (+it.price || 0), 0);
-    const checked = [...$("#ai-list").querySelectorAll("input:checked")].map((x) => +x.dataset.i);
+    const checked = [...document.querySelectorAll("#ai-list input:checked, #ai-pantry-list input:checked")].map((x) => +x.dataset.i);
     s.costBuy = checked.reduce((t, i) => t + (+s.items[i]?.price || 0), 0);
     s.costAt = Date.now();
     // árak a hozzávalók mellé is
-    $("#ai-list").querySelectorAll("li").forEach((li, i) => {
-      const q = li.querySelector(".qty"); if (!q) return;
+    document.querySelectorAll("#ai-list li[data-i], #ai-pantry-list li[data-i]").forEach((li) => {
+      const i = +li.dataset.i; const q = li.querySelector(".qty"); if (!q) return;
       q.querySelector(".ing-price")?.remove();
       if (+s.items[i]?.price > 0) q.insertAdjacentHTML("beforeend", `<small class="ing-price">~${fmtFt(s.items[i].price)}</small>`);
     });
@@ -1369,11 +1378,12 @@ function updateAddCount() {
   $("#ai-view").disabled = !state.suggestion?.items?.length;
   $("#ai-view").textContent = "Recept megnézése";
   if (state.recipe?.viewAfterLoad && state.suggestion?.items?.length) { state.recipe.viewAfterLoad = false; setTimeout(() => $("#ai-view").click(), 0); }
-  const n = $("#ai-list").querySelectorAll("input:checked").length;
+  const n = document.querySelectorAll("#ai-list input:checked, #ai-pantry-list input:checked").length;
   $("#ai-add").disabled = n === 0;
   $("#ai-add").textContent = n ? `Hozzáadás (${n})` : "Hozzáadás";
 }
 $("#ai-list").addEventListener("change", updateAddCount);
+$("#ai-pantry-list").addEventListener("change", updateAddCount);
 $("#ai-q").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-opt]"); if (!b) return;
   const R = state.recipe;
@@ -1389,7 +1399,7 @@ function buildCookEntry(s) {
   return {
     title: source || "Recept", servings: state.recipe?.servings || 4, minutes: s.minutes || 0,
     sourceSite: sourceLabel(s), sourceUrl, image: s.imageUrl || "", imageCredit: s.imageUrl ? sourceLabel(s) : "", imageQuery: state.recipe?.imageQuery || "",
-    ingredients: s.items.slice(0, 60).map((it) => ({ name: String(it.name || "").slice(0, 100), qty: String(it.qty || "").slice(0, 30) })),
+    ingredients: s.items.slice(0, 60).map((it) => ({ name: String(it.name || "").slice(0, 100), qty: String(it.qty || "").slice(0, 30), ...(it.staple ? { staple: true } : {}) })),
     steps: (s.steps || []).slice(0, 20), by: me.name,
   };
 }
@@ -1721,7 +1731,7 @@ $("#ai-add").addEventListener("click", async () => {
   const s = state.suggestion; if (!s) return;
   const source = (s.title || "").split(",")[0].trim().slice(0, 60);
   const sourceUrl = s.source?.url && /^https:\/\//.test(s.source.url) ? s.source.url.slice(0, 500) : "";
-  const picked = [...$("#ai-list").querySelectorAll("input:checked")].map((x) => s.items[+x.dataset.i]);
+  const picked = [...document.querySelectorAll("#ai-list input:checked, #ai-pantry-list input:checked")].map((x) => s.items[+x.dataset.i]);
   const items = picked.map((it) => ({
     name: String(it.name || "").slice(0, 100), qty: String(it.qty || "").slice(0, 30),
     category: CATS.includes(it.category) ? it.category : guessCategory(it.name),
@@ -1942,8 +1952,11 @@ $("#cooking").addEventListener("click", (e) => {
 /* Recept részletei */
 const cookSheet = $("#cook-sheet");
 let cookOpen = null, cookDelArmed = false;
+// Az adott lépésben használt hozzávalók és fűszerek (mennyiséggel)
+const usesHTML = (x) => (x?.uses?.length ? `<div class="uses">${x.uses.map((u) => `<span>${esc(u)}</span>`).join("")}</div>` : "");
 function openCookSheet(r, { preview = false } = {}) {
   if (!r) return;
+  const ingRows = (list) => list.map((it) => `<li><span>${esc(it.name)}</span><span class="q">${esc(it.qty || "")}</span>${onList.has(norm(it.name)) ? `<i class="on" title="A listán">listán</i>` : ""}</li>`).join("");
   cookOpen = r; cookDelArmed = false;
   $("#cook-done").hidden = preview;
   $("#cook-save").hidden = !preview;
@@ -1952,9 +1965,11 @@ function openCookSheet(r, { preview = false } = {}) {
     ${recipeImg(dishSrc(r), "cook-hero", r.title)}
     <div class="cook-src">${sourceChip(r.sourceSite, r.sourceUrl)}<span>${ICON_PEOPLE}${r.servings || 4} fő${r.minutes ? ` · ${r.minutes} perc` : ""}</span></div>
     <h4>Hozzávalók</h4>
-    <ul class="ing">${(r.ingredients || []).map((it) => `<li><span>${esc(it.name)}</span><span class="q">${esc(it.qty || "")}</span>${onList.has(norm(it.name)) ? `<i class="on" title="A listán">listán</i>` : ""}</li>`).join("")}</ul>
+    <ul class="ing">${ingRows((r.ingredients || []).filter((it) => !it.staple))}</ul>
+    ${(r.ingredients || []).some((it) => it.staple) ? `<h4>Nézd meg, van-e otthon</h4><p class="rhint">Fűszerek és alapok – ezek nem kerültek a bevásárlólistára.</p>
+    <ul class="ing pantry">${ingRows(r.ingredients.filter((it) => it.staple))}</ul>` : ""}
     <h4>Elkészítés</h4>
-    ${r.steps?.length ? `<ol class="steps">${r.steps.map((x) => `<li>${esc(x.text)}</li>`).join("")}</ol>`
+    ${r.steps?.length ? `<ol class="steps">${r.steps.map((x) => `<li>${esc(x.text)}${usesHTML(x)}</li>`).join("")}</ol>`
       : `<p class="rhint">Ehhez a recepthez nincsenek lépések.${r.sourceUrl ? " Az eredeti receptet a forrás linkjén találod." : ""}</p>`}
     <p class="credit">Recept: ${esc(r.sourceSite || "")}${r.sourceUrl ? ` – <a href="${esc(r.sourceUrl)}" target="_blank" rel="noopener">eredeti recept ↗</a>` : ""}. A lépések az eredeti recept alapján, röviden összefoglalva. Kép: ${esc(r.image ? (r.imageCredit || r.sourceSite || "") : "illusztráció")}.</p>`;
   $("#cook-title").textContent = r.title;
@@ -2007,6 +2022,8 @@ function renderStep() {
   $("#step-bar").style.width = `${((step.i + 1) / n) * 100}%`;
   $("#step-img").innerHTML = recipeImg(dishSrc(r), "step-big-img", r.title);
   $("#step-text").textContent = x.text;
+  $("#step-uses").innerHTML = x.uses?.length ? `<b>Ebben a lépésben:</b>${x.uses.map((u) => `<span>${esc(u)}</span>`).join("")}` : "";
+  $("#step-uses").hidden = !x.uses?.length;
   $("#step-prev").disabled = step.i === 0;
   $("#step-next").textContent = step.i === n - 1 ? "Kész!" : "Következő ›";
   $("#step-voice").classList.toggle("mic-live", voice.wantOn && voice.mode === "steps");
@@ -2026,7 +2043,7 @@ function goStep(d) {
   }
   step.i = Math.max(0, Math.min(n - 1, step.i + d));
   renderStep();
-  if (step.voice) speak(`${step.i + 1}. lépés. ${step.r.steps[step.i].text}`);
+  if (step.voice) speak(`${step.i + 1}. lépés. ${step.r.steps[step.i].text}${step.r.steps[step.i].uses?.length ? ` Ehhez kell: ${step.r.steps[step.i].uses.join(", ")}.` : ""}`);
 }
 function closeSteps() { if (stepSheet.open) stepSheet.close(); }
 stepSheet.addEventListener("close", () => {
