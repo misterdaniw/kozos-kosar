@@ -418,6 +418,8 @@ a.from::after { content: " ↗"; }
 /* Sheet header with back / star / close */
 .sheet-head { display: flex; align-items: center; gap: 10px; }
 .sheet-head h3 { flex: 1; min-width: 0; }
+/* receptek neve a hozzávaló- és főzés-lapon: kisebb, legfeljebb 2 sor */
+#ai-title, #cook-title { font-size: 18px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .back-btn, .close-btn {
   width: 40px; height: 40px; border-radius: 14px; border: 0; background: var(--bg); color: var(--ink);
   display: grid; place-items: center; flex: none;
