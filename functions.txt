@@ -1,0 +1,10 @@
+[32m[1m✔  functions:[22m[39m required API [1mcloudfunctions.googleapis.com[22m is enabled
+[32m[1m✔  artifactregistry:[22m[39m required API [1martifactregistry.googleapis.com[22m is enabled
+[32m[1m✔  functions:[22m[39m required API [1mcloudbuild.googleapis.com[22m is enabled
+[32m[1m✔  extensions:[22m[39m required API [1mfirebaseextensions.googleapis.com[22m is enabled
+[32m[1m✔  functions:[22m[39m required API [1mrun.googleapis.com[22m is enabled
+[32m[1m✔  functions:[22m[39m required API [1meventarc.googleapis.com[22m is enabled
+[32m[1m✔  functions:[22m[39m required API [1mstorage.googleapis.com[22m is enabled
+[32m[1m✔  functions:[22m[39m required API [1mpubsub.googleapis.com[22m is enabled
+[32m[1m✔ [22m[39m [1m[35mfunctions[searchRecipes(europe-west1)][39m[22m Skipped (No changes detected)
+[32m[1m✔ [22m[39m [1m[4mDeploy complete![24m[22m

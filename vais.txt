@@ -1,0 +1,3 @@
+VAIS billing=true
+VAIS datastore már létezik
+VAIS engine már létezik

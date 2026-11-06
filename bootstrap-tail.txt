@@ -1,0 +1,27 @@
+Projekt: kozos-kosar-307af
+== API-k bekapcsolása
+Operation "operations/acat.p2-44419361419-f6ad5475-9097-4d88-97e8-7578430cd4dd" finished successfully.
+== Firestore adatbázis
+Már létezik.
+== Névtelen bejelentkezés
+Bekapcsolva.
+== Hosting oldal
+== Webalkalmazás és beállítások
+- Downloading configuration data of your Firebase WEB app
+✔ Downloading configuration data of your Firebase WEB app
+config.js kitöltve: kozos-kosar-307af
+== App Check (reCAPTCHA Enterprise) – a Gemini (AI Logic) védelméhez
+reCAPTCHA kulcs: 6LfPfA4uAAAAAJXjxl2n9Yb3qVLhdeBfdWtzKyCE
+App Check regisztrálva.
+config.js: App Check beállítva
+== Gemini (AI Logic) állapota
+AI Logic API: ENABLED
+== Fizetési csomag (Blaze) ellenőrzése
+VAIS billing=true
+== Szerverfüggvényhez és Google-oldalkeresőhöz szükséges API-k
+Operation "operations/acat.p2-44419361419-cda6d6a6-817c-44ba-8640-29bc1e35f170" finished successfully.
+== Google oldalkereső (Vertex AI Search): csak streetkitchen.hu és mindmegette.hu
+VAIS datastore már létezik
+VAIS engine már létezik
+== Gemini a Google Cloud (Agent Platform) szolgáltatáson – utólagos számlázás, nem kell előre fizetett kredit
+Operation "operations/acat.p2-44419361419-d012785b-f532-49d0-a6bd-74694650cfe7" finished successfully.

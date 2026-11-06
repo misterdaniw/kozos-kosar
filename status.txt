@@ -1,0 +1,7 @@
+result: success
+run: https://github.com/misterdaniw/kozos-kosar/actions/runs/42223033775
+commit: d0a12b4913cfb9767628f95c96f1a3c882bd0443
+project: kozos-kosar-307af
+url: https://kozos-kosar-307af.web.app
+time: 2026-11-06T13:09:20Z
+steps: secret=success auth=success cli=success boot=success functions=success deploy=success
