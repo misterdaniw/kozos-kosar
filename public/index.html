@@ -8,6 +8,7 @@
 <meta name="description" content="Közös családi bevásárlólista, ami valós időben szinkronizál, és egy étel nevéből összeállítja a hozzávalókat.">
 <meta name="theme-color" content="#EAF3FB" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#111727" media="(prefers-color-scheme: dark)">
+<script>/* a választott megjelenés már az első kirajzolás előtt érvényes */try{var t=JSON.parse(localStorage.getItem("kk:theme"));if(t==="light"||t==="dark"){document.documentElement.dataset.theme=t;document.querySelectorAll('meta[name="theme-color"]').forEach(function(m){m.content=t==="dark"?"#111727":"#EAF3FB"})}}catch(e){}</script>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="modulepreload" href="app.js">
 <link rel="modulepreload" href="parser.js">
@@ -46,6 +47,7 @@
   --f-display: "Fredoka", "Baloo 2", "Arial Rounded MT Bold", system-ui, sans-serif;
   --f-body: "Nunito", "Segoe UI", Roboto, system-ui, sans-serif;
   --r: 22px;
+  --tint-a: 5%;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -54,6 +56,7 @@
     --leaf: #4CD39A; --leaf-ink: #06281A; --danger: #FF7B69;
     --tile-l: 24%; --icon-l: 74%; --chip-l: 20%; --ring-l: 58%; --soft: #1C2742; --soft-ink: #9CC3EE;
     --shadow: 0 1px 0 rgba(0,0,0,.3), 0 12px 28px -12px rgba(0,0,0,.6);
+    --tint-a: 13%;
     color-scheme: dark;
   }
 }
@@ -63,8 +66,10 @@
   --leaf: #4CD39A; --leaf-ink: #06281A; --danger: #FF7B69;
   --tile-l: 24%; --icon-l: 74%; --chip-l: 20%; --ring-l: 58%; --soft: #1C2742; --soft-ink: #9CC3EE;
   --shadow: 0 1px 0 rgba(0,0,0,.3), 0 12px 28px -12px rgba(0,0,0,.6);
+  --tint-a: 13%;
   color-scheme: dark;
 }
+:root[data-theme="light"] { color-scheme: light; }
 * { box-sizing: border-box; }
 img { max-width: 100%; height: auto; }
 html { -webkit-text-size-adjust: 100%; background: var(--bg); }
@@ -131,10 +136,9 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 /* List */
 main { padding-bottom: calc(var(--composer-h, 150px) + 16px); }
 #groups { display: grid; gap: 14px; margin-top: 12px; }
-.group { --tint-a: 8%; background: var(--surface); border-radius: var(--r); box-shadow: var(--shadow); overflow: hidden; }
+.group { background: var(--surface); border-radius: var(--r); box-shadow: var(--shadow); overflow: hidden; }
 /* a kártya háttere nagyon enyhén az ikon színét veszi fel */
 .group:not(.basket) { background: color-mix(in oklab, var(--surface), hsl(var(--h) 75% 55%) var(--tint-a)); }
-@media (prefers-color-scheme: dark) { .group { --tint-a: 13%; } }
 .group h2 {
   margin: 0; padding: 12px 12px 6px; display: flex; align-items: center; gap: 10px;
   font: 600 17px/1.2 var(--f-display);
@@ -396,6 +400,10 @@ dialog.sheet::backdrop { background: rgba(17,23,39,.45); }
 
 /* Settings toggles */
 .toggles { display: grid; gap: 8px; }
+.theme-row { display: grid; gap: 8px; background: var(--bg); border-radius: 16px; padding: 12px 14px; }
+.seg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; background: var(--surface); border-radius: 13px; padding: 4px; }
+.seg button { border: 0; border-radius: 10px; padding: 9px 4px; background: transparent; color: var(--muted); font: 700 14px/1.1 var(--f-body); cursor: pointer; }
+.seg button[aria-checked="true"] { background: var(--soft-ink); color: var(--surface); }
 .toggle { display: flex; gap: 12px; align-items: flex-start; background: var(--bg); border-radius: 16px; padding: 12px 14px; cursor: pointer; }
 .toggle input { width: 22px; height: 22px; accent-color: var(--leaf); flex: none; margin: 1px 0 0; }
 .toggle b { display: block; font-weight: 700; }
@@ -864,6 +872,14 @@ body { overflow-x: hidden; }
     <div class="toggles" id="voice-settings">
       <label class="toggle"><input type="checkbox" id="set-auto"><span><b>Megnyitáskor rögtön hallgasson</b><small>Az app indulásakor azonnal diktálhatsz.</small></span></label>
       <label class="toggle"><input type="checkbox" id="set-speak"><span><b>Kérdések felolvasása</b><small>Ha valamit nem ért, hangosan visszakérdez.</small></span></label>
+    </div>
+    <div class="theme-row">
+      <b>Megjelenés</b>
+      <div class="seg" id="set-theme" role="radiogroup" aria-label="Megjelenés">
+        <button type="button" role="radio" data-theme="auto">Automatikus</button>
+        <button type="button" role="radio" data-theme="light">☀️ Világos</button>
+        <button type="button" role="radio" data-theme="dark">🌙 Sötét</button>
+      </div>
     </div>
     <div class="toggles">
       <label class="toggle"><input type="checkbox" id="set-gf"><span><b>Glutén nélkül</b><small>Csak búza, árpa és rozs nélküli recepteket mutat, és a hozzávalóknál jelzi a glutént.</small></span></label>

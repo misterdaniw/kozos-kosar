@@ -1714,6 +1714,21 @@ $("#set-gf").addEventListener("change", () => {
   if (S.query && S.tab === "search") searchRecipes(S.query); // újrakeresés a szűrővel
 });
 $("#rs-gf-open").addEventListener("click", () => openListSheet());
+
+/* Megjelenés: automatikus (telefon szerint) / világos / sötét – azonnal érvényes */
+function applyTheme(t) {
+  const root = document.documentElement;
+  if (t === "light" || t === "dark") root.dataset.theme = t; else delete root.dataset.theme;
+  const dark = t === "dark" || (t !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+  document.querySelectorAll('meta[name="theme-color"]').forEach((m) => { m.content = dark ? "#111727" : "#EAF3FB"; });
+  document.querySelectorAll("#set-theme [data-theme]").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.theme === t)));
+}
+applyTheme(LS.get("kk:theme", "auto"));
+matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => applyTheme(LS.get("kk:theme", "auto")));
+$("#set-theme").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-theme]"); if (!b) return;
+  LS.set("kk:theme", b.dataset.theme); applyTheme(b.dataset.theme);
+});
 renderGf();
 $("#rs-body").addEventListener("click", (e) => {
   if (e.target.closest("#rs-more")) return moreRecipes();
