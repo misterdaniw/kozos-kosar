@@ -751,12 +751,71 @@ const ICON_CALC = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" st
 const ICON_PLUS_SM = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg>`;
 const ICON_X = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>`;
 
+/* ---------- Új tételek kiemelése és odagörgetés ----------
+   Az új (vagy bővített) tétel felvillan. Ha én adtam hozzá és nem látszik, odagörgetünk,
+   kicsit megállunk, majd vissza a lista tetejére. Diktálásnál a gyorsan egymás után érkező
+   tételeket összegyűjtjük, sorban (fentről lefelé) végigmegyünk rajtuk, és csak a legvégén
+   görgetünk vissza. Ha a felhasználó közben maga görget, nem vesszük el tőle a képernyőt. */
+const FRESH_MS = 2200;
+const fx = { fresh: new Map(), queue: [], timer: 0, back: 0, running: false, scrolled: false, cancel: false };
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+function freshAge(id) { const t = fx.fresh.get(id); if (t == null) return -1; const age = Date.now() - t; if (age > FRESH_MS) { fx.fresh.delete(id); return -1; } return age; }
+function markFresh(id, mine) {
+  fx.fresh.set(id, Date.now());
+  if (!mine) return;
+  fx.queue.push(id); fx.cancel = false;
+  clearTimeout(fx.back);
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+function visibleBand() {
+  const top = ($("header.top")?.getBoundingClientRect().bottom || 0) + 8;
+  const bottom = ($(".composer")?.getBoundingClientRect().top || innerHeight) - 8;
+  return { top, bottom };
+}
+async function runTour() {
+  if (fx.running) return;
+  fx.running = true;
+  try {
+    while (fx.queue.length && !fx.cancel) {
+      if (state.tab !== "shop") { fx.queue = []; break; }
+      const ids = [...new Set(fx.queue)]; fx.queue = [];
+      const pos = (id) => document.querySelector(`.item[data-id="${CSS.escape(id)}"]`)?.getBoundingClientRect().top ?? Infinity;
+      ids.sort((x, y) => pos(x) - pos(y));
+      let stops = 0;
+      for (const id of ids) {
+        if (fx.cancel || stops >= 6) break;
+        const el = document.querySelector(`.item[data-id="${CSS.escape(id)}"]`); // újrarajzolás után is a friss elem
+        if (!el) continue;
+        const r = el.getBoundingClientRect(), band = visibleBand();
+        if (r.top >= band.top && r.bottom <= band.bottom) continue; // már látszik
+        const y = scrollY + r.top - (band.top + band.bottom) / 2 + r.height / 2;
+        scrollTo({ top: Math.max(0, y), behavior: reduceMotion ? "auto" : "smooth" });
+        fx.scrolled = true; stops++;
+        await sleep(900);
+      }
+    }
+  } finally { fx.running = false; }
+  if (fx.queue.length && !fx.cancel) return runTour();
+  if (fx.scrolled && !fx.cancel) {
+    clearTimeout(fx.back);
+    fx.back = setTimeout(() => {
+      if (fx.running || fx.queue.length || fx.cancel) return;
+      fx.scrolled = false;
+      scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
+    }, 1400);
+  }
+}
+// ha a felhasználó maga görget/érinti a listát, abbahagyjuk az automatikus görgetést
+["touchstart", "wheel"].forEach((ev) => $("main").addEventListener(ev, () => {
+  if (fx.running || fx.scrolled) { fx.cancel = true; fx.scrolled = false; clearTimeout(fx.back); }
+}, { passive: true }));
+
 function itemHTML(it, fresh) {
   const meta = (it.by ? `${face(it.by, "mini")}<span>${esc(it.by)}</span>` : "")
     + (it.source ? (it.sourceUrl && /^https:\/\//.test(it.sourceUrl)
       ? `<a class="from" href="${esc(it.sourceUrl)}" target="_blank" rel="noopener">${esc(it.source)}${it.sourceSite ? ` · ${esc(it.sourceSite)}` : ""}</a>`
       : `<span class="from">${esc(it.source)}${it.sourceSite ? ` · ${esc(it.sourceSite)}` : ""}</span>`) : "");
-  return `<li class="item${it.done ? " done" : ""}${fresh ? " fresh" : ""}" data-id="${esc(it.id)}">
+  return `<li class="item${it.done ? " done" : ""}${fresh ? " fresh" : ""}" data-id="${esc(it.id)}"${fresh ? ` style="animation-delay:-${freshAge(it.id)}ms"` : ""}>
     <button class="check" data-act="toggle" aria-pressed="${!!it.done}" aria-label="${it.done ? "Visszarakás a listára" : "Megvettem"}: ${esc(it.name)}">${ICON_CHECK}</button>
     <div class="item-main">
       <div class="item-line"><span class="item-name">${esc(it.name)}</span>${it.qty ? `<span class="item-qty">${esc(it.qty)}</span>` : ""}${hasPrice(it) ? `<span class="item-price" title="Becsült ár${it.priceAssumed ? ` (${esc(it.priceAssumed)})` : ""}">~${fmtFt(it.price)}</span>` : ""}</div>
@@ -842,6 +901,7 @@ async function addMore(extra) {
   moreSheet.close();
   try {
     const before = it.qty || "";
+    markFresh(it.id, true);
     await backend.updateItem(state.listId, it.id, { qty });
     toast(`${it.name}: ${before ? `${before} → ` : ""}${qty}`, { label: "Visszavonás", run: () => backend.updateItem(state.listId, it.id, { qty: before }).catch(() => {}) });
   } catch (err) { console.error(err); toast("Nem sikerült menteni. Próbáld újra."); }
@@ -862,7 +922,8 @@ const EMPTY_ART = `<svg class="empty-art" viewBox="0 0 160 110" aria-hidden="tru
 function renderItems() {
   const open = state.items.filter((i) => !i.done);
   const done = state.items.filter((i) => i.done);
-  const isFresh = (it) => !state.firstLoad && !state.seen.has(it.id);
+  if (!state.firstLoad) state.items.forEach((it) => { if (!state.seen.has(it.id)) markFresh(it.id, it.by === me.name); });
+  const isFresh = (it) => freshAge(it.id) >= 0;
   let html = "";
   if (!state.items.length) {
     html = `<div class="empty">${EMPTY_ART}<strong>Üres a kosár!</strong><span>Koppints a mikrofonra, és mondd sorban, mi kell. Vagy a <b>Recept</b> gombbal mondd meg, mit főzöl ma.</span></div>`;
@@ -881,6 +942,7 @@ function renderItems() {
   state.items.forEach((i) => state.seen.add(i.id));
   state.firstLoad = false;
   renderSub();
+  if (fx.queue.length) { clearTimeout(fx.timer); fx.timer = setTimeout(runTour, 350); }
 }
 
 const notReady = () => { if (backend) return false; toast("Egy pillanat, csatlakozom…", null, "info"); return true; };
@@ -1037,6 +1099,7 @@ async function addParsed(list, { text, spoken }) {
       if (cur && extra) { // már a listán van: hozzáadjuk a mennyiséget
         const before = cur.qty || "";
         const qty = addQty(before, extra).slice(0, 30);
+        markFresh(cur.id, true);
         backend.updateItem(state.listId, cur.id, { qty }).catch((e) => console.error(e));
         toast(`${cur.name}: ${before ? `${before} → ` : ""}${qty}`, { label: "Visszavonás", run: () => backend.updateItem(state.listId, cur.id, { qty: before }).catch(() => {}) });
         setHeard(text, `${cur.name}: ${qty}`);

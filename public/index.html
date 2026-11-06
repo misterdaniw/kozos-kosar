@@ -180,8 +180,17 @@ ul.items { list-style: none; margin: 0; padding: 0 0 6px; }
 .from::before { content: "✦ "; color: var(--sun); }
 .item.done .item-name { text-decoration: line-through; text-decoration-thickness: 2px; color: var(--muted); font-weight: 600; }
 .item.done .item-qty { background: transparent; color: var(--muted); }
-.item.fresh { animation: fresh 1.6s ease-out; }
-@keyframes fresh { 0% { background: var(--sun-soft); transform: translateX(-6px); } 20% { transform: none; } 100% { background: transparent; } }
+/* új / bővített tétel: beugrik, felvillan a kategória színében, majd lassan elhalványul */
+.item.fresh { animation: fresh 2.2s ease-out both; }
+.item.fresh .check { animation: freshCheck 2.2s ease-out both; }
+@keyframes fresh {
+  0% { background: hsl(var(--h, 45) 85% 60% / .35); transform: translateX(-18px) scale(.96); opacity: 0; }
+  14% { background: hsl(var(--h, 45) 85% 60% / .35); transform: translateX(3px) scale(1.01); opacity: 1; }
+  24% { transform: none; }
+  60% { background: hsl(var(--h, 45) 85% 60% / .2); }
+  100% { background: transparent; }
+}
+@keyframes freshCheck { 0%, 10% { transform: scale(.4); } 24% { transform: scale(1.18); } 34%, 100% { transform: none; } }
 .del {
   width: 40px; height: 40px; border: 0; background: none; color: var(--muted); opacity: .7;
   border-radius: 12px; display: grid; place-items: center; flex: none;
