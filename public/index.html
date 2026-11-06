@@ -48,6 +48,7 @@
   --f-body: "Nunito", "Segoe UI", Roboto, system-ui, sans-serif;
   --r: 22px;
   --tint-a: 5%;
+  --item-bg: rgba(255,255,255,.85);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -57,6 +58,7 @@
     --tile-l: 24%; --icon-l: 74%; --chip-l: 20%; --ring-l: 58%; --soft: #1C2742; --soft-ink: #9CC3EE;
     --shadow: 0 1px 0 rgba(0,0,0,.3), 0 12px 28px -12px rgba(0,0,0,.6);
     --tint-a: 13%;
+  --item-bg: rgba(255,255,255,.055);
     color-scheme: dark;
   }
 }
@@ -67,6 +69,7 @@
   --tile-l: 24%; --icon-l: 74%; --chip-l: 20%; --ring-l: 58%; --soft: #1C2742; --soft-ink: #9CC3EE;
   --shadow: 0 1px 0 rgba(0,0,0,.3), 0 12px 28px -12px rgba(0,0,0,.6);
   --tint-a: 13%;
+  --item-bg: rgba(255,255,255,.055);
   color-scheme: dark;
 }
 :root[data-theme="light"] { color-scheme: light; }
@@ -156,11 +159,19 @@ main { padding-bottom: calc(var(--composer-h, 150px) + 16px); }
 }
 .group.basket { --h: 150; background: transparent; box-shadow: none; border: 2px dashed var(--line); }
 .group.basket .cat-ic, .group.basket .n { background: var(--surface); color: var(--muted); }
-ul.items { list-style: none; margin: 0; padding: 0 0 6px; }
-.item { display: flex; align-items: center; gap: 12px; padding: 8px 6px 8px 14px; min-height: 58px; }
-.item + .item { border-top: 1.5px dashed var(--line); }
+/* a kategórián belül a tételek egymáshoz érő kis kártyák */
+ul.items { list-style: none; margin: 0; padding: 4px 8px 8px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 3px; }
+.item {
+  display: flex; align-items: flex-start; gap: 12px; padding: 12px 6px 12px 12px; min-height: 58px;
+  background: var(--item-bg); border-radius: 6px;
+}
+.item:first-child { border-top-left-radius: 16px; border-top-right-radius: 16px; }
+.item:last-child { border-bottom-left-radius: 16px; border-bottom-right-radius: 16px; }
+.group.basket .item { background: transparent; }
+.item .more, .item .del { align-self: center; }
 .check {
-  width: 30px; height: 30px; border-radius: 50%; flex: none; padding: 0;
+  margin-top: -1px;
+  width: 28px; height: 28px; border-radius: 50%; flex: none; padding: 0;
   border: 2.5px solid hsl(var(--h) 60% var(--ring-l)); background: transparent;
   display: grid; place-items: center; color: var(--leaf-ink);
 }
@@ -170,14 +181,16 @@ ul.items { list-style: none; margin: 0; padding: 0 0 6px; }
 @keyframes pop { 0% { transform: scale(.6); } 100% { transform: scale(1); } }
 .item-main { flex: 1; min-width: 0; }
 .item-line { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.item-name { font-weight: 700; font-size: 16.5px; overflow-wrap: anywhere; }
+.item-name { font-weight: 800; font-size: 18.5px; line-height: 1.4; overflow-wrap: anywhere; }
 .item-qty {
   font: 600 13.5px/1.5 var(--f-display); font-variant-numeric: tabular-nums; white-space: nowrap;
   background: hsl(var(--h) 85% var(--chip-l)); color: hsl(var(--h) 60% var(--icon-l)); padding: 0 9px; border-radius: 99px;
 }
 .item-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; font-weight: 600; color: var(--muted); margin-top: 3px; }
-.from { background: var(--sun-soft); color: var(--ink); padding: 0 8px; border-radius: 99px; font-size: 12.5px; }
+/* recept-forrás: egyszerű, halk sor a tétel alatt (nem buborék) */
+.from { flex-basis: 100%; min-width: 0; color: var(--muted); font-size: 12.5px; font-weight: 600; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .from::before { content: "✦ "; color: var(--sun); }
+a.from { color: var(--soft-ink); }
 .item.done .item-name { text-decoration: line-through; text-decoration-thickness: 2px; color: var(--muted); font-weight: 600; }
 .item.done .item-qty { background: transparent; color: var(--muted); }
 /* új / bővített tétel: beugrik, felvillan a kategória színében, majd lassan elhalványul */
