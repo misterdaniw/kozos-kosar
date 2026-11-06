@@ -1778,16 +1778,16 @@ $("#set-gf").addEventListener("change", () => {
 });
 $("#rs-gf-open").addEventListener("click", () => openListSheet());
 
-/* Megjelenés: automatikus (telefon szerint) / világos / sötét – azonnal érvényes */
+/* Megjelenés: alapból sötét, a Beállításokban világosra állítható – azonnal érvényes, eszközönként megjegyezve */
+const themeOf = () => (LS.get("kk:theme", "dark") === "light" ? "light" : "dark");
 function applyTheme(t) {
-  const root = document.documentElement;
-  if (t === "light" || t === "dark") root.dataset.theme = t; else delete root.dataset.theme;
-  const dark = t === "dark" || (t !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+  t = t === "light" ? "light" : "dark";
+  document.documentElement.dataset.theme = t;
+  const dark = t === "dark";
   document.querySelectorAll('meta[name="theme-color"]').forEach((m) => { m.content = dark ? "#111727" : "#EAF3FB"; });
   document.querySelectorAll("#set-theme [data-theme]").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.theme === t)));
 }
-applyTheme(LS.get("kk:theme", "auto"));
-matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => applyTheme(LS.get("kk:theme", "auto")));
+applyTheme(themeOf());
 $("#set-theme").addEventListener("click", (e) => {
   const b = e.target.closest("[data-theme]"); if (!b) return;
   LS.set("kk:theme", b.dataset.theme); applyTheme(b.dataset.theme);

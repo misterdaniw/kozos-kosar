@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="hu">
+<html lang="hu" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
@@ -8,7 +8,7 @@
 <meta name="description" content="Közös családi bevásárlólista, ami valós időben szinkronizál, és egy étel nevéből összeállítja a hozzávalókat.">
 <meta name="theme-color" content="#EAF3FB" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#111727" media="(prefers-color-scheme: dark)">
-<script>/* a választott megjelenés már az első kirajzolás előtt érvényes */try{var t=JSON.parse(localStorage.getItem("kk:theme"));if(t==="light"||t==="dark"){document.documentElement.dataset.theme=t;document.querySelectorAll('meta[name="theme-color"]').forEach(function(m){m.content=t==="dark"?"#111727":"#EAF3FB"})}}catch(e){}</script>
+<script>/* a választott megjelenés már az első kirajzolás előtt érvényes */var t="dark";try{if(JSON.parse(localStorage.getItem("kk:theme"))==="light")t="light"}catch(e){}document.documentElement.dataset.theme=t;document.querySelectorAll('meta[name="theme-color"]').forEach(function(m){m.content=t==="dark"?"#111727":"#EAF3FB"})</script>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="modulepreload" href="app.js">
 <link rel="modulepreload" href="parser.js">
@@ -423,7 +423,7 @@ dialog.sheet::backdrop { background: rgba(17,23,39,.45); }
 /* Settings toggles */
 .toggles { display: grid; gap: 8px; }
 .theme-row { display: grid; gap: 8px; background: var(--bg); border-radius: 16px; padding: 12px 14px; }
-.seg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; background: var(--surface); border-radius: 13px; padding: 4px; }
+.seg { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; background: var(--surface); border-radius: 13px; padding: 4px; }
 .seg button { border: 0; border-radius: 10px; padding: 9px 4px; background: transparent; color: var(--muted); font: 700 14px/1.1 var(--f-body); cursor: pointer; }
 .seg button[aria-checked="true"] { background: var(--soft-ink); color: var(--surface); }
 .toggle { display: flex; gap: 12px; align-items: flex-start; background: var(--bg); border-radius: 16px; padding: 12px 14px; cursor: pointer; }
@@ -898,7 +898,6 @@ body { overflow-x: hidden; }
     <div class="theme-row">
       <b>Megjelenés</b>
       <div class="seg" id="set-theme" role="radiogroup" aria-label="Megjelenés">
-        <button type="button" role="radio" data-theme="auto">Automatikus</button>
         <button type="button" role="radio" data-theme="light">☀️ Világos</button>
         <button type="button" role="radio" data-theme="dark">🌙 Sötét</button>
       </div>
