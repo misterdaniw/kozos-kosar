@@ -131,7 +131,10 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 /* List */
 main { padding-bottom: calc(var(--composer-h, 150px) + 16px); }
 #groups { display: grid; gap: 14px; margin-top: 12px; }
-.group { background: var(--surface); border-radius: var(--r); box-shadow: var(--shadow); overflow: hidden; }
+.group { --tint-a: 5%; background: var(--surface); border-radius: var(--r); box-shadow: var(--shadow); overflow: hidden; }
+/* a kártya háttere nagyon enyhén az ikon színét veszi fel */
+.group:not(.basket) { background: color-mix(in oklab, var(--surface), hsl(var(--h) 75% 55%) var(--tint-a)); }
+@media (prefers-color-scheme: dark) { .group { --tint-a: 7%; } }
 .group h2 {
   margin: 0; padding: 12px 12px 6px; display: flex; align-items: center; gap: 10px;
   font: 600 17px/1.2 var(--f-display);
